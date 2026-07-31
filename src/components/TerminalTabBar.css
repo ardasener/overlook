@@ -1,0 +1,33 @@
+.terminal-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ol-border);
+}
+
+/* Control-only strip: content is rendered by the split layout. */
+.terminal-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.terminal-tabs .ant-tabs-content-holder {
+  display: none;
+}
+
+.terminal-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.terminal-tabs .ant-tabs-tab {
+  padding: 4px 0;
+}
+
+.tabbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}

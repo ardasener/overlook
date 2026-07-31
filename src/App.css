@@ -1,0 +1,190 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ol-bg);
+}
+
+.app-layout {
+  height: 100vh;
+}
+
+/* Row beneath the full-width tab bar: sidebar + terminal area. */
+.app-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-sider {
+  border-right: 1px solid var(--ol-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-sider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(12px * var(--ol-scale)) calc(16px * var(--ol-scale))
+    calc(8px * var(--ol-scale));
+  font-size: calc(11px * var(--ol-scale));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ol-text-muted);
+}
+
+.app-sider-settings {
+  color: var(--ol-text-muted) !important;
+}
+
+.app-sider-settings:hover {
+  color: var(--ol-text) !important;
+}
+
+.workspace-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 calc(8px * var(--ol-scale)) calc(12px * var(--ol-scale));
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── Split layout ─────────────────────────────────────────── */
+
+.layout-area {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* One panel per slot; accent-colored border identifies the panel's tab.
+   Slots are absolutely positioned, so parent padding is ignored — the
+   outer margin and inter-panel gutters are encoded in the insets. */
+.slot {
+  position: absolute;
+  overflow: hidden;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--ol-accent-0);
+  background: var(--ol-bg);
+}
+
+.slot-1 {
+  border-color: var(--ol-accent-1);
+}
+
+.slot-2 {
+  border-color: var(--ol-accent-2);
+}
+
+.host-hidden {
+  display: none;
+}
+
+/* single: slot0 fills with an 8px outer margin */
+.slot-0 {
+  inset: 8px;
+}
+
+/* vertical: slot0 left, slot1 right (50/50, 4px gutter) */
+.layout-area.vertical .slot-0 {
+  inset: 8px calc(50% + 4px) 8px 8px;
+}
+
+.layout-area.vertical .slot-1 {
+  inset: 8px 8px 8px calc(50% + 4px);
+}
+
+/* bottom: slot0 top 70%, slot2 bottom 30% full-width */
+.layout-area.bottom .slot-0 {
+  inset: 8px 8px calc(30% + 4px) 8px;
+}
+
+.layout-area.bottom .slot-2 {
+  inset: calc(70% + 4px) 8px 8px 8px;
+}
+
+/* vertical + bottom combined */
+.layout-area.vertical.bottom .slot-0 {
+  inset: 8px calc(50% + 4px) calc(30% + 4px) 8px;
+}
+
+.layout-area.vertical.bottom .slot-1 {
+  inset: 8px 8px calc(30% + 4px) calc(50% + 4px);
+}
+
+.layout-area.vertical.bottom .slot-2 {
+  inset: calc(70% + 4px) 8px 8px 8px;
+}
+
+/* Empty panel placeholder */
+.slot-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-placeholder-button {
+  color: var(--ol-text-muted) !important;
+}
+
+.slot-placeholder-button:hover {
+  color: var(--ol-text) !important;
+}
+
+/* Terminal host fills its slot panel. */
+.terminal-host {
+  position: absolute;
+  inset: 0;
+}
+
+.terminal-host .terminal {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+ * xterm's default CSS paints .xterm-viewport black; the theme background is
+ * applied to the inner scrollable element, which can be shorter than the
+ * viewport (fit leaves a sub-cell strip at the bottom). Match the viewport to
+ * the palette so that strip doesn't render black. The higher specificity
+ * beats xterm.css regardless of injection order (vite does not preserve
+ * import order in dev).
+ */
+.terminal-host .xterm .xterm-viewport {
+  background-color: var(--ol-bg);
+}
+
+.terminal-error {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  color: #f87171;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: #1a1d23;
+  border: 1px solid #3b2121;
+  border-radius: 4px;
+  padding: 8px 12px;
+}

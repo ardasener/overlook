@@ -1,0 +1,4 @@
+.workspace-tree .ant-tree-node-content-wrapper {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: calc(12px * var(--ol-scale));
+}
