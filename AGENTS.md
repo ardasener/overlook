@@ -18,7 +18,7 @@ Do not add new commands that bypass this boundary. New commands must be register
 
 ## Stack & commands
 
-- Package manager: **pnpm** (never mix in npm/yarn lockfiles).
+- Package manager: **bun** (never mix in pnpm/npm/yarn lockfiles).
 - Frontend: React 19 + TypeScript + Vite in `src/`. Ant Design 6 for chrome, xterm.js owns its own styling.
 - Terminal: `@xterm/xterm@6.0.0` + our `useTerminal` hook (see "Dependencies to not fix").
 - Backend: Rust in `src-tauri/`, modules under `src-tauri/src/modules/<area>/`.
@@ -27,11 +27,11 @@ Do not add new commands that bypass this boundary. New commands must be register
 ### Commands
 
 ```bash
-pnpm install
-pnpm tauri dev            # dev app
-pnpm tauri build          # production bundle
-pnpm check-types          # TypeScript type check
-pnpm lint                 # ESLint
+bun install
+bun tauri dev            # dev app
+bun tauri build          # production bundle
+bun check-types          # TypeScript type check
+bun lint                 # ESLint
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
@@ -43,6 +43,7 @@ cd src-tauri && cargo test
 - Keep comments minimal; document intent, not implementation.
 - Domain-driven names over generic ones.
 - Windows/WSL support is explicitly deferred; keep platform-specific logic in `#[cfg(unix)]`/`#[cfg(windows)]` arms.
+- **WKWebView has no working HTML5 drag-and-drop for custom dataTransfer.** The drag ghost starts, but `dragover`/`drop` events are never delivered to webview elements. Tab drag-and-drop is implemented with a pointer-based drag (`TerminalLayoutContext`'s `drag` state + hit-testing via `elementFromPoint`); do not reintroduce `draggable`/`dragstart` for it.
 
 ## Dependencies to not "fix"
 

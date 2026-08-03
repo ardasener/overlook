@@ -30,6 +30,20 @@ export function ptyResize(
   return invoke("pty_resize", { sessionId, cols, rows });
 }
 
+/**
+ * Resolve the name of the process running in the foreground of a session's
+ * shell (the deepest live descendant), or "" when the shell itself is the
+ * leaf (terminal idle).
+ */
+export function ptyForegroundProcess(sessionId: number): Promise<string> {
+  return invoke<string>("pty_foreground_process", { sessionId });
+}
+
+/** Basename of the resolved default shell (e.g. "zsh", "bash"), lowercased. */
+export function ptyShellName(): Promise<string> {
+  return invoke<string>("pty_shell_name");
+}
+
 /** Kill the shell of a session. */
 export function ptyClose(sessionId: number): Promise<void> {
   return invoke("pty_close", { sessionId });

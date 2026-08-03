@@ -2,3 +2,77 @@
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: calc(12px * var(--ol-scale));
 }
+
+/* Search + action buttons in the sider header. */
+.workspace-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-sider-header {
+  gap: calc(4px * var(--ol-scale));
+}
+
+/* Project and worktree node rows. */
+.project-title {
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--ol-scale));
+  min-width: 0;
+}
+
+.project-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.project-action {
+  color: var(--ol-text-muted) !important;
+  flex-shrink: 0;
+  padding: 0 calc(3px * var(--ol-scale));
+  height: auto;
+}
+
+.project-action:hover {
+  color: var(--ol-text) !important;
+}
+
+.worktree-label {
+  color: var(--ol-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tree .ant-tree-node-selected .worktree-label {
+  color: var(--ol-text);
+  font-weight: 600;
+}
+
+/* Popover contents (add project / fork). */
+.workspace-popover {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ol-scale));
+  width: 220px;
+}
+
+.workspace-popover-text {
+  font-size: calc(12px * var(--ol-scale));
+  color: var(--ol-text);
+}
+
+.workspace-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ol-scale));
+}
+
+.workspace-popover-error {
+  color: #f87171;
+  font-size: calc(11px * var(--ol-scale));
+}

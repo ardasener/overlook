@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Palette } from "./palettes";
+import { withAlpha, type Palette } from "./palettes";
 
 /**
  * CSS custom properties derived from the palette. Applied on the document root
@@ -18,6 +18,10 @@ export function paletteCssVars(palette: Palette, uiScale = 1): CSSProperties {
     "--ol-accent-0": palette.accents[0],
     "--ol-accent-1": palette.accents[1],
     "--ol-accent-2": palette.accents[2],
+    // Dimmed accents: used for inactive pane borders (active-pane indication).
+    "--ol-accent-0-dim": withAlpha(palette.accents[0], 0.35),
+    "--ol-accent-1-dim": withAlpha(palette.accents[1], 0.35),
+    "--ol-accent-2-dim": withAlpha(palette.accents[2], 0.35),
     "--ol-scale": String(uiScale),
   } as CSSProperties;
 }

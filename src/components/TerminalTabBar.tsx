@@ -1,4 +1,5 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent } from "react";
+import { useRef } from "react";
 import { Button, Tabs, Tooltip } from "antd";
 import {
   ColumnWidthOutlined,
@@ -17,12 +18,36 @@ import "./TerminalTabBar.css";
  * empty bar space drags the window.
  */
 function TerminalTabBar() {
-  const { state, slotOf, newTab, closeTab, selectTab, toggleVertical, toggleBottom } =
+  const { state, slotOf, newTab, closeTab, selectTab, toggleVertical, toggleBottom, beginDrag } =
     useTerminalLayout();
   const { palette } = useSettings();
 
   const focusedTabId =
     state.focusedSlot < state.slots.length ? state.slots[state.focusedSlot] : null;
+
+  // Press origin for pointer-drag initiation (mousedown → threshold → beginDrag).
+  const pressRef = useRef<{ tabId: string; x: number; y: number } | null>(null);
+
+  const handleLabelMouseDown = (tabId: string) => (e: MouseEvent) => {
+    if (e.button !== 0) return;
+    pressRef.current = { tabId, x: e.clientX, y: e.clientY };
+  };
+
+  const handleLabelMouseMove = (tabId: string) => (e: MouseEvent) => {
+    const press = pressRef.current;
+    if (!press || press.tabId !== tabId) return;
+    const dx = e.clientX - press.x;
+    const dy = e.clientY - press.y;
+    if (dx * dx + dy * dy > 16) {
+      // ~4px movement threshold: this is a drag, not a click.
+      pressRef.current = null;
+      beginDrag(tabId, e.clientX, e.clientY);
+    }
+  };
+
+  const clearPress = () => {
+    pressRef.current = null;
+  };
 
   return (
     <div
@@ -47,7 +72,21 @@ function TerminalTabBar() {
             color: slot !== null ? palette.accents[slot] : "var(--ol-text-muted)",
             fontWeight: focused ? 600 : 400,
           };
-          return { key: tab.id, label: <span style={style}>{tab.title}</span>, closable: true };
+          return {
+            key: tab.id,
+            label: (
+              <span
+                className="terminal-tab-label"
+                onMouseDown={handleLabelMouseDown(tab.id)}
+                onMouseMove={handleLabelMouseMove(tab.id)}
+                onMouseUp={clearPress}
+                style={style}
+              >
+                {tab.title}
+              </span>
+            ),
+            closable: true,
+          };
         })}
       />
       <div className="tabbar-actions">

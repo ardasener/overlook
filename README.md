@@ -14,23 +14,23 @@ Design inspiration comes from [Terax](https://github.com/crynta/terax-ai) (termi
 | Terminal emulation | xterm.js (`@xterm/xterm` 6.0.0, WebGL renderer) |
 | Terminal wrapper | `useTerminal` — our own thin React hook (no react-xtermjs) |
 | PTY backend | `portable-pty` |
-| Package manager | pnpm |
+| Package manager | bun |
 
 ## Quick start
 
 Prerequisites: [Rust](https://rustup.rs), [Node 20+](https://nodejs.org), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
 
 ```bash
-pnpm install        # install frontend deps
-pnpm tauri dev      # development (compiles Rust + launches app window)
-pnpm tauri build    # production bundle
+bun install        # install frontend deps
+bun tauri dev      # development (compiles Rust + launches app window)
+bun tauri build    # production bundle
 ```
 
 ## Checks
 
 ```bash
-pnpm check-types    # TypeScript type check
-pnpm lint           # ESLint
+bun check-types    # TypeScript type check
+bun lint           # ESLint
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```

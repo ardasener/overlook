@@ -25,6 +25,13 @@
   padding: 4px 0;
 }
 
+/* Tab labels are pointer-drag sources; don't select text while dragging. */
+.terminal-tabs .ant-tabs-tab .terminal-tab-label {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
 .tabbar-actions {
   display: flex;
   align-items: center;

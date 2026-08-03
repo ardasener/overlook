@@ -2,40 +2,95 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { ptyShellName } from "../modules/terminal/pty";
 
 export interface TerminalTab {
   id: string;
   title: string;
+  /** Font size offset relative to the settings default (per-tab zoom). */
+  fontZoom: number;
+  /** Worktree path this tab's sessions run in. */
+  worktree: string;
 }
 
-export interface LayoutState {
-  /** All tabs in creation order (shown + parked). */
+/** Session-scoped layout for one worktree: its tabs, splits, and focus. */
+export interface WorktreeLayout {
   tabs: TerminalTab[];
   /** slot index → tab id (null = placeholder). slot0 always exists. */
   slots: (string | null)[];
-  /** Panel that receives new/selected tabs. */
   focusedSlot: number;
   /** Right pane (slot1) open. */
   vertical: boolean;
   /** Bottom pane (slot2) open. */
   bottom: boolean;
-  nextTabNumber: number;
+}
+
+/**
+ * Shape of the ACTIVE worktree's layout, kept for component compatibility
+ * (the tab bar, split layout, and dimming read these fields).
+ */
+export interface LayoutState {
+  tabs: TerminalTab[];
+  slots: (string | null)[];
+  focusedSlot: number;
+  vertical: boolean;
+  bottom: boolean;
+}
+
+/** In-flight pointer-based tab drag (WKWebView lacks working HTML5 DnD). */
+export interface TabDrag {
+  tabId: string;
+  x: number;
+  y: number;
+  /** Pane slot currently under the pointer, or null. */
+  overSlot: number | null;
+}
+
+/** Extract the slot index from a slot element's class (`slot-0`/`slot-1`/`slot-2`). */
+export function slotFromClass(el: Element): number | null {
+  const m = el.className.match(/slot-([012])/);
+  return m ? Number(m[1]) : null;
 }
 
 interface TerminalLayoutContextValue {
+  /** The active worktree's layout (empty when nothing is active). */
   state: LayoutState;
-  /** Panel slot a tab currently occupies, or null if parked. */
+  /** Every tab across every worktree (hosts stay mounted). */
+  allTabs: TerminalTab[];
+  /** Currently selected worktree path, or null. */
+  activeWorktree: string | null;
+  /** Resolved default shell name (e.g. "zsh"), the idle tab title. */
+  shellName: string;
+  tabOf: (tabId: string) => TerminalTab | undefined;
+  /** Panel slot a tab occupies within its own worktree, or null if parked. */
   slotOf: (tabId: string) => number | null;
+  /** Activate a worktree, creating a fresh one-tab layout on first visit. */
+  setActiveWorktree: (path: string) => void;
   newTab: () => void;
   closeTab: (tabId: string) => void;
   selectTab: (tabId: string) => void;
   focusSlot: (slot: number) => void;
   toggleVertical: () => void;
   toggleBottom: () => void;
+  /** Assign a dragged tab to a slot (parked → assign; shown elsewhere → swap). */
+  dropTabOnSlot: (tabId: string, slot: number) => void;
+  /** Swap the tabs of two slots (reserved for pane drag, not yet wired). */
+  swapSlots: (a: number, b: number) => void;
+  /** Adjust a tab's font size by a delta relative to the settings default. */
+  zoomTab: (tabId: string, delta: number) => void;
+  /** Set a tab's title (auto-naming from the running process). */
+  renameTab: (tabId: string, title: string) => void;
+  /** Active pointer drag (null when idle). */
+  drag: TabDrag | null;
+  beginDrag: (tabId: string, x: number, y: number) => void;
+  moveDrag: (x: number, y: number) => void;
+  endDrag: () => void;
 }
 
 const TerminalLayoutContext = createContext<TerminalLayoutContextValue | null>(null);
@@ -48,124 +103,377 @@ function makeId(): string {
 }
 
 export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<LayoutState>(() => {
-    const firstTab: TerminalTab = { id: makeId(), title: "Terminal 1" };
-    return {
-      tabs: [firstTab],
-      // Always length 3; closed panels hold null.
-      slots: [firstTab.id, null, null],
-      focusedSlot: 0,
-      vertical: false,
-      bottom: false,
-      nextTabNumber: 2,
+  // Default tab title = the resolved shell name (e.g. "zsh", "bash").
+  const [shellName, setShellName] = useState("sh");
+  useEffect(() => {
+    let cancelled = false;
+    void ptyShellName()
+      .then((name) => {
+        if (!cancelled && name) setShellName(name);
+      })
+      .catch(() => {
+        /* keep "sh" fallback */
+      });
+    return () => {
+      cancelled = true;
     };
-  });
+  }, []);
+
+  /** worktree path → its session layout. */
+  const [layouts, setLayouts] = useState<Record<string, WorktreeLayout>>({});
+  const [activeWorktree, setActiveWorktreeState] = useState<string | null>(null);
+
+  const activeLayout: WorktreeLayout | null =
+    activeWorktree != null ? (layouts[activeWorktree] ?? null) : null;
+
+  const allTabs = useMemo(
+    () => Object.values(layouts).flatMap((l) => l.tabs),
+    [layouts],
+  );
+
+  const tabOf = useCallback(
+    (tabId: string) => allTabs.find((t) => t.id === tabId),
+    [allTabs],
+  );
 
   const slotOf = useCallback(
     (tabId: string) => {
-      const i = state.slots.findIndex((t) => t === tabId);
-      return i === -1 ? null : i;
+      for (const layout of Object.values(layouts)) {
+        const i = layout.slots.indexOf(tabId);
+        if (i !== -1) return i;
+      }
+      return null;
     },
-    [state.slots],
+    [layouts],
   );
 
-  /** Create a tab for a new terminal. */
-  const createTab = useCallback((nextNumber: number) => {
-    const tab: TerminalTab = { id: makeId(), title: `Terminal ${nextNumber}` };
-    return { tab, nextNumber: nextNumber + 1 };
-  }, []);
-
-  const newTab = useCallback(() => {
-    setState((prev) => {
-      const focused = Math.min(prev.focusedSlot, prev.slots.length - 1);
-      const { tab, nextNumber } = createTab(prev.nextTabNumber);
-      const slots = [...prev.slots];
-      slots[focused] = tab.id; // previous occupant parks
-      return {
-        ...prev,
-        tabs: [...prev.tabs, tab],
-        slots,
-        focusedSlot: focused,
-        nextTabNumber: nextNumber,
-      };
-    });
-  }, [createTab]);
-
-  const closeTab = useCallback((tabId: string) => {
-    setState((prev) => {
-      const slots = prev.slots.map((t) => (t === tabId ? null : t));
-      const wasFocused = prev.slots[prev.focusedSlot] === tabId;
-      return {
-        ...prev,
-        tabs: prev.tabs.filter((t) => t.id !== tabId),
-        slots,
-        focusedSlot: wasFocused ? 0 : prev.focusedSlot,
-      };
-    });
-  }, []);
-
-  const selectTab = useCallback((tabId: string) => {
-    setState((prev) => {
-      const focused = Math.min(prev.focusedSlot, prev.slots.length - 1);
-      // If the tab is already shown somewhere, just focus that slot.
-      const shown = prev.slots.indexOf(tabId);
-      if (shown !== -1) {
-        return { ...prev, focusedSlot: shown };
+  /** The layout that owns a tab (for cross-worktree mutations). */
+  const layoutOfTab = useCallback(
+    (tabId: string) => {
+      for (const [path, layout] of Object.entries(layouts)) {
+        if (layout.tabs.some((t) => t.id === tabId)) return path;
       }
-      // Otherwise show it in the focused slot, parking the current occupant.
-      const slots = [...prev.slots];
-      slots[focused] = tabId;
-      return { ...prev, slots, focusedSlot: focused };
-    });
-  }, []);
+      return null;
+    },
+    [layouts],
+  );
 
-  const focusSlot = useCallback((slot: number) => {
-    setState((prev) => ({ ...prev, focusedSlot: slot }));
-  }, []);
+  const updateLayout = useCallback(
+    (path: string, updater: (l: WorktreeLayout) => WorktreeLayout) => {
+      setLayouts((prev) => {
+        const layout = prev[path];
+        if (!layout) return prev;
+        const next = updater(layout);
+        // Bail when nothing changed so stable updates keep stable references
+        // (children keyed off `layouts`/`allTabs` must not churn).
+        return next === layout ? prev : { ...prev, [path]: next };
+      });
+    },
+    [],
+  );
 
-  /**
-   * Open/close a panel at `slot`. Opening fills it with the first parked tab
-   * in order, or creates a new terminal when nothing is parked. Closing parks
-   * whatever the panel held.
-   */
-  const toggleSplit = useCallback(
-    (slot: number, key: "vertical" | "bottom") => {
-      setState((prev) => {
-        const open = !prev[key];
-        const slots = [...prev.slots];
-        if (open) {
-          const parked = prev.tabs.find((t) => !slots.includes(t.id));
-          if (parked) {
-            slots[slot] = parked.id;
-            return { ...prev, [key]: open, slots };
-          }
-          const { tab, nextNumber } = createTab(prev.nextTabNumber);
-          slots[slot] = tab.id;
-          return {
-            ...prev,
-            [key]: open,
-            slots,
-            tabs: [...prev.tabs, tab],
-            nextTabNumber: nextNumber,
-          };
-        }
-        slots[slot] = null;
+  const updateActiveLayout = useCallback(
+    (updater: (l: WorktreeLayout) => WorktreeLayout) => {
+      setLayouts((prev) => {
+        if (activeWorktree == null || !prev[activeWorktree]) return prev;
+        const layout = prev[activeWorktree];
+        const next = updater(layout);
+        return next === layout ? prev : { ...prev, [activeWorktree]: next };
+      });
+    },
+    [activeWorktree],
+  );
+
+  const setActiveWorktree = useCallback(
+    (path: string) => {
+      setLayouts((prev) => {
+        if (prev[path]) return prev;
+        // Fresh worktree: one tab in the default slot.
+        const tab: TerminalTab = {
+          id: makeId(),
+          title: shellName,
+          fontZoom: 0,
+          worktree: path,
+        };
         return {
           ...prev,
-          [key]: open,
+          [path]: {
+            tabs: [tab],
+            slots: [tab.id, null, null],
+            focusedSlot: 0,
+            vertical: false,
+            bottom: false,
+          },
+        };
+      });
+      setActiveWorktreeState(path);
+    },
+    [shellName],
+  );
+
+  const newTab = useCallback(() => {
+    updateActiveLayout((layout) => {
+      const focused = Math.min(layout.focusedSlot, layout.slots.length - 1);
+      const tab: TerminalTab = {
+        id: makeId(),
+        title: shellName,
+        fontZoom: 0,
+        worktree: activeWorktree!,
+      };
+      const slots = [...layout.slots];
+      slots[focused] = tab.id; // previous occupant parks
+      return { ...layout, tabs: [...layout.tabs, tab], slots, focusedSlot: focused };
+    });
+  }, [updateActiveLayout, shellName, activeWorktree]);
+
+  const closeTab = useCallback(
+    (tabId: string) => {
+      const path = layoutOfTab(tabId);
+      if (!path) return;
+      updateLayout(path, (layout) => {
+        const slots = layout.slots.map((t) => (t === tabId ? null : t));
+        const wasFocused = layout.slots[layout.focusedSlot] === tabId;
+        return {
+          ...layout,
+          tabs: layout.tabs.filter((t) => t.id !== tabId),
           slots,
-          focusedSlot: prev.focusedSlot === slot ? 0 : prev.focusedSlot,
+          focusedSlot: wasFocused ? 0 : layout.focusedSlot,
         };
       });
     },
-    [createTab],
+    [layoutOfTab, updateLayout],
+  );
+
+  const selectTab = useCallback(
+    (tabId: string) => {
+      updateActiveLayout((layout) => {
+        const focused = Math.min(layout.focusedSlot, layout.slots.length - 1);
+        // If the tab is already shown somewhere, just focus that slot.
+        const shown = layout.slots.indexOf(tabId);
+        if (shown !== -1) {
+          return shown === focused ? layout : { ...layout, focusedSlot: shown };
+        }
+        // Otherwise show it in the focused slot, parking the current occupant.
+        const slots = [...layout.slots];
+        slots[focused] = tabId;
+        return { ...layout, slots, focusedSlot: focused };
+      });
+    },
+    [updateActiveLayout],
+  );
+
+  const focusSlot = useCallback(
+    (slot: number) => {
+      updateActiveLayout((layout) =>
+        layout.focusedSlot === slot ? layout : { ...layout, focusedSlot: slot },
+      );
+    },
+    [updateActiveLayout],
+  );
+
+  const toggleSplit = useCallback(
+    (slot: number, key: "vertical" | "bottom") => {
+      updateActiveLayout((layout) => {
+        const open = !layout[key];
+        const slots = [...layout.slots];
+        if (open) {
+          const parked = layout.tabs.find((t) => !slots.includes(t.id));
+          if (parked) {
+            slots[slot] = parked.id;
+            return { ...layout, [key]: open, slots };
+          }
+          const tab: TerminalTab = {
+            id: makeId(),
+            title: shellName,
+            fontZoom: 0,
+            worktree: activeWorktree!,
+          };
+          slots[slot] = tab.id;
+          return { ...layout, [key]: open, slots, tabs: [...layout.tabs, tab] };
+        }
+        slots[slot] = null;
+        return {
+          ...layout,
+          [key]: open,
+          slots,
+          focusedSlot: layout.focusedSlot === slot ? 0 : layout.focusedSlot,
+        };
+      });
+    },
+    [updateActiveLayout, shellName, activeWorktree],
   );
 
   const toggleVertical = useCallback(() => toggleSplit(1, "vertical"), [toggleSplit]);
   const toggleBottom = useCallback(() => toggleSplit(2, "bottom"), [toggleSplit]);
+
+  const dropTabOnSlot = useCallback(
+    (tabId: string, slot: number) => {
+      updateActiveLayout((layout) => {
+        const slots = [...layout.slots];
+        const from = slots.indexOf(tabId);
+        if (from !== -1 && from !== slot) {
+          // Shown in another pane → swap the two panes' tabs.
+          slots[from] = slots[slot];
+          slots[slot] = tabId;
+        } else if (from === -1) {
+          // Parked → assign, parking the slot's current occupant.
+          slots[slot] = tabId;
+        } else {
+          return { ...layout, focusedSlot: slot };
+        }
+        return { ...layout, slots, focusedSlot: slot };
+      });
+    },
+    [updateActiveLayout],
+  );
+
+  const swapSlots = useCallback(
+    (a: number, b: number) => {
+      updateActiveLayout((layout) => {
+        const slots = [...layout.slots];
+        const tmp = slots[a];
+        slots[a] = slots[b];
+        slots[b] = tmp;
+        return { ...layout, slots };
+      });
+    },
+    [updateActiveLayout],
+  );
+
+  const zoomTab = useCallback(
+    (tabId: string, delta: number) => {
+      const path = layoutOfTab(tabId);
+      if (!path) return;
+      updateLayout(path, (layout) => ({
+        ...layout,
+        tabs: layout.tabs.map((t) =>
+          t.id === tabId ? { ...t, fontZoom: t.fontZoom + delta } : t,
+        ),
+      }));
+    },
+    [layoutOfTab, updateLayout],
+  );
+
+  const renameTab = useCallback(
+    (tabId: string, title: string) => {
+      const path = layoutOfTab(tabId);
+      if (!path) return;
+      updateLayout(path, (layout) => ({
+        ...layout,
+        tabs: layout.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
+      }));
+    },
+    [layoutOfTab, updateLayout],
+  );
+
+  // ── Pointer-based tab drag ──────────────────────────────────────────────
+
+  const [drag, setDrag] = useState<TabDrag | null>(null);
+  const dragRef = useRef<TabDrag | null>(null);
+  useEffect(() => {
+    dragRef.current = drag;
+  }, [drag]);
+
+  const beginDrag = useCallback((tabId: string, x: number, y: number) => {
+    setDrag({ tabId, x, y, overSlot: null });
+  }, []);
+
+  const moveDrag = useCallback((x: number, y: number) => {
+    setDrag((prev) => {
+      if (!prev) return prev;
+      const el = document.elementFromPoint(x, y);
+      const slotEl = el?.closest?.(".slot");
+      const overSlot =
+        slotEl && !slotEl.classList.contains("host-hidden")
+          ? slotFromClass(slotEl)
+          : null;
+      return { ...prev, x, y, overSlot };
+    });
+  }, []);
+
+  const endDrag = useCallback(() => {
+    const d = dragRef.current;
+    if (d && d.overSlot !== null) {
+      dropTabOnSlot(d.tabId, d.overSlot);
+    }
+    setDrag(null);
+  }, [dropTabOnSlot]);
+
+  // While dragging, track the pointer globally; end on mouseup.
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e: MouseEvent) => moveDrag(e.clientX, e.clientY);
+    const onUp = () => endDrag();
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [drag !== null, moveDrag, endDrag]);
+
+  // The active layout exposed in the old flat shape.
+  const state: LayoutState = useMemo(
+    () =>
+      activeLayout
+        ? {
+            tabs: activeLayout.tabs,
+            slots: activeLayout.slots,
+            focusedSlot: activeLayout.focusedSlot,
+            vertical: activeLayout.vertical,
+            bottom: activeLayout.bottom,
+          }
+        : { tabs: [], slots: [null, null, null], focusedSlot: 0, vertical: false, bottom: false },
+    [activeLayout],
+  );
+
   const value = useMemo<TerminalLayoutContextValue>(
-    () => ({ state, slotOf, newTab, closeTab, selectTab, focusSlot, toggleVertical, toggleBottom }),
-    [state, slotOf, newTab, closeTab, selectTab, focusSlot, toggleVertical, toggleBottom],
+    () => ({
+      state,
+      allTabs,
+      activeWorktree,
+      shellName,
+      tabOf,
+      slotOf,
+      setActiveWorktree,
+      newTab,
+      closeTab,
+      selectTab,
+      focusSlot,
+      toggleVertical,
+      toggleBottom,
+      dropTabOnSlot,
+      swapSlots,
+      zoomTab,
+      renameTab,
+      drag,
+      beginDrag,
+      moveDrag,
+      endDrag,
+    }),
+    [
+      state,
+      allTabs,
+      activeWorktree,
+      shellName,
+      tabOf,
+      slotOf,
+      setActiveWorktree,
+      newTab,
+      closeTab,
+      selectTab,
+      focusSlot,
+      toggleVertical,
+      toggleBottom,
+      dropTabOnSlot,
+      swapSlots,
+      zoomTab,
+      renameTab,
+      drag,
+      beginDrag,
+      moveDrag,
+      endDrag,
+    ],
   );
 
   return (

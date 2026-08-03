@@ -47,7 +47,9 @@ export function useTerminal(
 
     if (containerRef.current) {
       term.open(containerRef.current);
-      term.focus();
+      // No auto-focus: the terminal's hidden input must not grab keyboard
+      // focus from the rest of the UI. Focus happens on explicit click
+      // (TerminalHost's onMouseDown).
     }
     setTerminal(term);
 

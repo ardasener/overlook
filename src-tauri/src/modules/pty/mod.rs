@@ -117,3 +117,30 @@ pub fn pty_close(manager: State<PtyManager>, session_id: u32) -> Result<(), Stri
     }
     Ok(())
 }
+
+/// Resolve the name of the process running in the foreground of a session's
+/// shell (deepest live descendant). Empty string when the terminal is idle.
+#[tauri::command]
+pub fn pty_foreground_process(
+    manager: State<PtyManager>,
+    session_id: u32,
+) -> Result<String, String> {
+    let session = manager
+        .get(session_id)
+        .ok_or_else(|| format!("no such session: {session_id}"))?;
+    let Some(shell_pid) = session.shell_pid else {
+        return Ok(String::new());
+    };
+    Ok(session::foreground_process(shell_pid).unwrap_or_default())
+}
+
+/// Basename of the resolved default shell (e.g. "zsh", "bash"), lowercased —
+/// used as the initial tab title.
+#[tauri::command]
+pub fn pty_shell_name() -> String {
+    session::resolve_shell()
+        .rsplit('/')
+        .next()
+        .unwrap_or("sh")
+        .to_lowercase()
+}

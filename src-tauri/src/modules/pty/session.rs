@@ -6,6 +6,7 @@
 //! `wait()`, while `pty_close` kills through the killer without touching the
 //! child, avoiding deadlock.
 
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -100,6 +101,9 @@ impl Drop for ChildKillGuard {
 /// closes, then the writer (input side), then the master last.
 pub struct Session {
     pub id: u32,
+    /// PID of the spawned shell, captured at spawn (the child handle itself
+    /// moves into the waiter thread). Used for foreground-process resolution.
+    pub shell_pid: Option<u32>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     master: Mutex<Box<dyn MasterPty + Send>>,
@@ -144,6 +148,81 @@ impl Drop for Session {
     }
 }
 
+/// Shell command names that may wrap the actual command (`sh -c 'npm …'`).
+/// The walk descends through these to find the process the user launched.
+fn is_shell_comm(comm: &str) -> bool {
+    matches!(
+        comm,
+        "sh" | "bash" | "zsh" | "fish" | "dash" | "ksh" | "tcsh" | "csh"
+    )
+}
+
+/// Resolve the name of the foreground process of `shell_pid` from raw `ps`
+/// output lines (one "pid ppid comm" per line, no header). Returns the first
+/// non-shell descendant (the process the user launched), or `None` when the
+/// shell is idle (no descendants).
+///
+/// Descending only through shell wrappers — never through the launched
+/// process's own children (e.g. vim's language servers) — keeps titles as the
+/// main process name. The lowest-pid child wins at each level.
+pub fn parse_ps_output(ps_lines: &str, shell_pid: u32) -> Option<String> {
+    let mut children: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
+    for line in ps_lines.lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(pid), Some(ppid)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        let (Ok(pid), Ok(ppid)) = (pid.parse::<u32>(), ppid.parse::<u32>()) else {
+            continue;
+        };
+        let comm = fields.collect::<Vec<_>>().join(" ");
+        // macOS `ps` may report a full executable path in comm; titles and
+        // shell-wrapper detection want the basename. Titles are always
+        // lowercase.
+        let comm = std::path::Path::new(&comm)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or(comm)
+            .to_lowercase();
+        children.entry(ppid).or_default().push((pid, comm));
+    }
+    for kids in children.values_mut() {
+        kids.sort_by_key(|(pid, _)| *pid);
+    }
+
+    let mut current = shell_pid;
+    while let Some(kids) = children.get(&current) {
+        let (child_pid, comm) = kids.first()?;
+        if is_shell_comm(comm) {
+            // Shell wrapper — descend into it.
+            current = *child_pid;
+            continue;
+        }
+        // First non-shell descendant is the foreground process.
+        return Some(comm.clone());
+    }
+    None
+}
+
+/// Resolve the name of the process running in the foreground of `shell_pid`'s
+/// tree by asking `ps`. Unix-only; returns `None` elsewhere.
+#[cfg(unix)]
+pub fn foreground_process(shell_pid: u32) -> Option<String> {
+    let output = std::process::Command::new("ps")
+        .args(["-axo", "pid=,ppid=,comm="])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_ps_output(&String::from_utf8_lossy(&output.stdout), shell_pid)
+}
+
+#[cfg(not(unix))]
+pub fn foreground_process(_shell_pid: u32) -> Option<String> {
+    None
+}
+
 /// Open a PTY, spawn the resolved shell in it, and start the io threads.
 /// Returns the session; the caller registers it with the manager.
 pub fn spawn_session(
@@ -177,6 +256,7 @@ pub fn spawn_session(
     let exited = Arc::new(AtomicBool::new(false));
     let session = Arc::new(Session {
         id,
+        shell_pid: child.process_id(),
         killer: Mutex::new(killer),
         writer: writer.clone(),
         master: Mutex::new(pair.master),
@@ -402,5 +482,69 @@ mod tests {
 
         session.kill();
         manager.remove(1);
+    }
+
+    /// The shell is the leaf → idle terminal → no process name.
+    #[test]
+    fn ps_parser_shell_leaf_is_none() {
+        let ps = "  100  1  zsh\n  50   1  launchd\n";
+        assert_eq!(parse_ps_output(ps, 100), None);
+    }
+
+    /// One direct child → its name is the foreground process.
+    #[test]
+    fn ps_parser_direct_child() {
+        let ps = "  100  1  zsh\n  101  100 vim\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("vim"));
+    }
+
+    /// Deep nesting: descends through shell wrappers but stops at the first
+    /// non-shell process (the launched command, not its children).
+    #[test]
+    fn ps_parser_first_non_shell_descendant() {
+        let ps = "  100  1  zsh\n  101  100 sh\n  102  101 npm\n  103  102 node\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("npm"));
+    }
+
+    /// A process with its own children (e.g. vim → language server) stops at
+    /// the main process, not the subprocess.
+    #[test]
+    fn ps_parser_stops_at_main_process_not_subprocess() {
+        let ps = "  100  1  zsh\n  101  100 vim\n  102  101 node\n  103  102 copilot-lsp\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("vim"));
+    }
+
+    /// Lowest-pid child wins at each level.
+    #[test]
+    fn ps_parser_prefers_lowest_pid_child() {
+        let ps = "  100  1  zsh\n  102  100 node\n  101  100 vim\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("vim"));
+    }
+
+    /// Full executable paths in comm are reduced to their basename (and paths
+    /// on shell wrappers still descend correctly).
+    #[test]
+    fn ps_parser_reduces_paths_to_basename() {
+        let ps = "  100  1  zsh\n  101  100 /opt/homebrew/bin/vim\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("vim"));
+
+        let ps2 = "  100  1  zsh\n  101  100 /bin/sh\n  102  101 /usr/bin/npm\n";
+        assert_eq!(parse_ps_output(ps2, 100).as_deref(), Some("npm"));
+    }
+
+    /// Titles are always lowercase.
+    #[test]
+    fn ps_parser_lowercases_comm() {
+        let ps = "  100  1  zsh\n  101  100 Vim\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("vim"));
+    }
+
+    /// Malformed lines are skipped; empty input yields None.
+    #[test]
+    fn ps_parser_tolerates_garbage() {
+        let ps = "garbage line\n  100  1  zsh\n\n  notpid  100 vim\n  101  100 ls\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("ls"));
+        assert_eq!(parse_ps_output("", 100), None);
+        assert_eq!(parse_ps_output("  onlyone  1  field\n", 100), None);
     }
 }

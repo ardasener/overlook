@@ -117,8 +117,8 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
         </div>
 
         <div className="settings-field">
-          <span className="settings-label">Size</span>
-          <Tooltip title="Terminal font size">
+          <span className="settings-label">Default font size</span>
+          <Tooltip title="Baseline terminal font size; Ctrl/Cmd + scroll zooms individual panes">
             <InputNumber
               value={settings.termSize}
               min={TERM_SIZE_MIN}

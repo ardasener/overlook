@@ -2,18 +2,31 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { useSettings } from "../../settings/SettingsContext";
+import { useTerminalLayout } from "../../layout/TerminalLayoutContext";
 import { xtermOptions } from "../../themes/xterm";
 import { useTerminal } from "./useTerminal";
-import { ptyClose, ptyOpen, ptyResize, ptyWrite } from "./pty";
+import {
+  ptyClose,
+  ptyForegroundProcess,
+  ptyOpen,
+  ptyResize,
+  ptyWrite,
+} from "./pty";
 
 const BASE_TERMINAL_OPTIONS = {
   cursorBlink: true,
   scrollback: 10_000,
 };
 
+/** Bounds for the effective (default + zoom) font size. */
+const FONT_SIZE_MIN = 8;
+const FONT_SIZE_MAX = 24;
+
 interface TerminalHostProps {
   /** Stable identity for this host's PTY session. */
   tabId: string;
+  /** Panel slot this host occupies, or null when parked. */
+  slot: number | null;
   /** Whether the host is currently on screen (hidden hosts skip fitting). */
   visible: boolean;
 }
@@ -24,13 +37,22 @@ interface TerminalHostProps {
  * PTY session and scrollback survive tab switches, parking, and panel moves.
  * Unmounting (session kill) happens only when the tab closes.
  */
-function TerminalHost({ tabId, visible }: TerminalHostProps) {
+function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
   const sessionIdRef = useRef<number | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const visibleRef = useRef(visible);
+  const titleRef = useRef<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   const { settings, palette } = useSettings();
+  const { tabOf, shellName, focusSlot, zoomTab, renameTab } = useTerminalLayout();
+
+  const tab = tabOf(tabId);
+  const fontZoom = tab?.fontZoom ?? 0;
+  const effectiveFontSize = Math.min(
+    FONT_SIZE_MAX,
+    Math.max(FONT_SIZE_MIN, settings.termSize + fontZoom),
+  );
 
   // Initial options reflect the settings at mount time; changes apply live.
   const initialOptions = useMemo(
@@ -69,19 +91,67 @@ function TerminalHost({ tabId, visible }: TerminalHostProps) {
     };
   }, [terminal]);
 
-  // Apply appearance settings live: theme, font family, and font size swap
-  // without recreating the terminal, preserving the PTY session + scrollback.
+  // Apply appearance live: theme + font family from settings, font size from
+  // the per-tab zoom. Refit when the size changes so the new cell geometry
+  // propagates to the PTY via onResize.
+  const prevFontSizeRef = useRef(effectiveFontSize);
   useEffect(() => {
     if (!terminal) return;
-    const { fontFamily, fontSize, theme } = xtermOptions(
+    const { fontFamily, theme } = xtermOptions(
       palette,
       settings.termFont,
       settings.termSize,
     );
     terminal.options.fontFamily = fontFamily;
-    terminal.options.fontSize = fontSize;
     terminal.options.theme = theme;
-  }, [terminal, settings, palette]);
+    terminal.options.fontSize = effectiveFontSize;
+    if (prevFontSizeRef.current !== effectiveFontSize) {
+      prevFontSizeRef.current = effectiveFontSize;
+      fitAddonRef.current?.fit();
+    }
+  }, [terminal, settings, palette, effectiveFontSize, fitAddonRef]);
+
+  // Ctrl/Cmd + wheel (or pinch) zooms this pane's font. Native non-passive
+  // listener so preventDefault actually stops webview page zoom.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      zoomTab(tabId, e.deltaY < 0 ? 1 : -1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [containerRef, tabId, zoomTab]);
+
+  // Auto-title: poll the foreground process while visible; rename when it
+  // differs from the current title, reverting to the shell name when idle.
+  useEffect(() => {
+    titleRef.current = tab?.title;
+  }, [tab?.title]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    const interval = setInterval(() => {
+      const id = sessionIdRef.current;
+      if (id == null) return;
+      void ptyForegroundProcess(id)
+        .then((name) => {
+          const next = name || shellName;
+          if (cancelled || next === titleRef.current) return;
+          renameTab(tabId, next);
+        })
+        .catch(() => {
+          /* transient — retry next tick */
+        });
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [visible, tabId, shellName, renameTab]);
 
   // Spawn the PTY session once the terminal is ready; tear it down on unmount
   // (tab close). StrictMode double-mounts effects in dev: the cancelled guard
@@ -90,7 +160,10 @@ function TerminalHost({ tabId, visible }: TerminalHostProps) {
     let cancelled = false;
     let openedId: number | null = null;
 
-    void ptyOpen(null, (event) => {
+    // Every tab belongs to a worktree; its shell starts there.
+    const cwd = tab?.worktree ?? null;
+
+    void ptyOpen(cwd, (event) => {
       if (event.event === "output") {
         terminalRef.current?.write(new Uint8Array(event.data.data));
       }
@@ -142,7 +215,10 @@ function TerminalHost({ tabId, visible }: TerminalHostProps) {
     <div
       className="terminal-host"
       ref={containerRef}
-      onMouseDown={() => terminalRef.current?.focus()}
+      onMouseDown={() => {
+        if (slot !== null) focusSlot(slot);
+        terminalRef.current?.focus();
+      }}
     >
       {error != null && <div className="terminal-error">{error}</div>}
     </div>
