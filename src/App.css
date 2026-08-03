@@ -45,14 +45,6 @@ body,
   color: var(--ol-text-muted);
 }
 
-.app-sider-settings {
-  color: var(--ol-text-muted) !important;
-}
-
-.app-sider-settings:hover {
-  color: var(--ol-text) !important;
-}
-
 .workspace-tree {
   flex: 1;
   overflow-y: auto;

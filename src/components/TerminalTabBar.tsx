@@ -4,20 +4,33 @@ import { Button, Tabs, Tooltip } from "antd";
 import {
   ColumnWidthOutlined,
   InsertRowBelowOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   PlusOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { useSettings } from "../settings/SettingsContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
 import { isMacOS } from "../lib/platform";
 import "./TerminalTabBar.css";
 
+interface TerminalTabBarProps {
+  onOpenSettings: () => void;
+  workspacesOpen: boolean;
+  onToggleWorkspaces: () => void;
+}
+
 /**
  * Tab strip (control-only — content is rendered by the split layout) plus the
- * new-tab and split-toggle actions. The container is a macOS drag region:
- * AntD tab items (role="tab") and buttons are clickable and block dragging;
- * empty bar space drags the window.
+ * new-tab, split-toggle, settings and workspace-toggle actions. The container
+ * is a macOS drag region: AntD tab items (role="tab") and buttons are
+ * clickable and block dragging; empty bar space drags the window.
  */
-function TerminalTabBar() {
+function TerminalTabBar({
+  onOpenSettings,
+  workspacesOpen,
+  onToggleWorkspaces,
+}: TerminalTabBarProps) {
   const { state, slotOf, newTab, closeTab, selectTab, toggleVertical, toggleBottom, beginDrag } =
     useTerminalLayout();
   const { palette } = useSettings();
@@ -90,6 +103,24 @@ function TerminalTabBar() {
         })}
       />
       <div className="tabbar-actions">
+        <Tooltip title={workspacesOpen ? "Hide workspaces" : "Show workspaces"}>
+          <Button
+            type="text"
+            size="small"
+            icon={workspacesOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+            onClick={onToggleWorkspaces}
+            aria-label="Toggle workspaces"
+          />
+        </Tooltip>
+        <Tooltip title="Settings">
+          <Button
+            type="text"
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={onOpenSettings}
+            aria-label="Settings"
+          />
+        </Tooltip>
         <Tooltip title="New terminal">
           <Button
             type="text"

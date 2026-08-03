@@ -22,6 +22,7 @@ function App() {
 
 function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const { projects } = useWorkspace();
   const { activeWorktree, setActiveWorktree } = useTerminalLayout();
 
@@ -36,10 +37,22 @@ function AppShell() {
     <Layout className="app-layout">
       {/* Full-width tab bar on top so the macOS traffic lights sit over it;
           the workspace sidebar lives below it, beside the terminal area. */}
-      <TerminalTabBar />
+      <TerminalTabBar
+        onOpenSettings={() => setSettingsOpen(true)}
+        workspacesOpen={workspacesOpen}
+        onToggleWorkspaces={() => setWorkspacesOpen((open) => !open)}
+      />
       <Layout className="app-body">
-        <Sider width={240} className="app-sider" theme="dark">
-          <WorkspaceSidebar onOpenSettings={() => setSettingsOpen(true)} />
+        <Sider
+          width={240}
+          className="app-sider"
+          theme="dark"
+          collapsible
+          collapsed={!workspacesOpen}
+          collapsedWidth={0}
+          trigger={null}
+        >
+          <WorkspaceSidebar />
         </Sider>
         <Content className="app-content">
           <SplitLayout />

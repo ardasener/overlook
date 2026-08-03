@@ -4,7 +4,6 @@ import {
   DeleteOutlined,
   DownOutlined,
   PlusOutlined,
-  SettingOutlined,
 } from "@ant-design/icons";
 import { Button, Input, Popconfirm, Popover, Tooltip, Tree } from "antd";
 import type { TreeDataNode, TreeProps } from "antd";
@@ -12,17 +11,13 @@ import { useWorkspace, type ProjectInfo } from "../workspace/WorkspaceContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
 import "./WorkspaceSidebar.css";
 
-interface WorkspaceSidebarProps {
-  onOpenSettings: () => void;
-}
-
 /**
  * Project/worktree tree. Projects are the top level; each contains its default
  * worktree (the directory itself) plus managed git worktrees. Selecting any
  * worktree makes it the active one. The search filters by project path or
  * branch name; `+`/`−` manage projects; the fork button creates worktrees.
  */
-function WorkspaceSidebar({ onOpenSettings }: WorkspaceSidebarProps) {
+function WorkspaceSidebar() {
   const {
     filtered,
     search,
@@ -238,15 +233,6 @@ function WorkspaceSidebar({ onOpenSettings }: WorkspaceSidebarProps) {
             <Button type="text" size="small" icon={<PlusOutlined />} aria-label="Add project" />
           </Tooltip>
         </Popover>
-        <Tooltip title="Settings">
-          <Button
-            type="text"
-            size="small"
-            icon={<SettingOutlined />}
-            onClick={onOpenSettings}
-            aria-label="Settings"
-          />
-        </Tooltip>
       </div>
       <Tree
         className="workspace-tree"
