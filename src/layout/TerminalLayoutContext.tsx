@@ -17,6 +17,8 @@ export interface TerminalTab {
   fontZoom: number;
   /** Worktree path this tab's sessions run in. */
   worktree: string;
+  /** Direct-exec command argv (runnable tabs); null = shell session. */
+  command: string[] | null;
 }
 
 /** Session-scoped layout for one worktree: its tabs, splits, and focus. */
@@ -73,6 +75,9 @@ interface TerminalLayoutContextValue {
   /** Activate a worktree, creating a fresh one-tab layout on first visit. */
   setActiveWorktree: (path: string) => void;
   newTab: () => void;
+  /** Launch runnable commands: one tab per argv, first in the focused slot,
+   * the rest parked, all in the active worktree. */
+  launchRunnable: (commands: string[][]) => void;
   closeTab: (tabId: string) => void;
   selectTab: (tabId: string) => void;
   focusSlot: (slot: number) => void;
@@ -100,6 +105,18 @@ let idCounter = 0;
 function makeId(): string {
   idCounter += 1;
   return `tab-${idCounter}`;
+}
+
+/** Build a tab for a worktree; `command` is null for shell sessions. */
+function makeTab(worktree: string, title: string, command: string[] | null): TerminalTab {
+  return { id: makeId(), title, fontZoom: 0, worktree, command };
+}
+
+/** Executable basename of a command's argv (the deterministic tab title). */
+function commandName(argv: string[]): string {
+  const exe = argv[0] ?? "app";
+  const base = exe.split("/").pop() ?? exe;
+  return base.split("\\").pop() ?? base;
 }
 
 export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
@@ -189,12 +206,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
       setLayouts((prev) => {
         if (prev[path]) return prev;
         // Fresh worktree: one tab in the default slot.
-        const tab: TerminalTab = {
-          id: makeId(),
-          title: shellName,
-          fontZoom: 0,
-          worktree: path,
-        };
+        const tab = makeTab(path, shellName, null);
         return {
           ...prev,
           [path]: {
@@ -214,17 +226,32 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
   const newTab = useCallback(() => {
     updateActiveLayout((layout) => {
       const focused = Math.min(layout.focusedSlot, layout.slots.length - 1);
-      const tab: TerminalTab = {
-        id: makeId(),
-        title: shellName,
-        fontZoom: 0,
-        worktree: activeWorktree!,
-      };
+      const tab = makeTab(activeWorktree!, shellName, null);
       const slots = [...layout.slots];
       slots[focused] = tab.id; // previous occupant parks
       return { ...layout, tabs: [...layout.tabs, tab], slots, focusedSlot: focused };
     });
   }, [updateActiveLayout, shellName, activeWorktree]);
+
+  const launchRunnable = useCallback(
+    (commands: string[][]) => {
+      if (commands.length === 0 || activeWorktree == null) return;
+      updateActiveLayout((layout) => {
+        const focused = Math.min(layout.focusedSlot, layout.slots.length - 1);
+        // Deterministic titles: the executable basename of each command.
+        const tabs = commands.map((argv) => makeTab(activeWorktree, commandName(argv), argv));
+        const slots = [...layout.slots];
+        slots[focused] = tabs[0].id; // previous occupant parks
+        return {
+          ...layout,
+          tabs: [...layout.tabs, ...tabs],
+          slots,
+          focusedSlot: focused,
+        };
+      });
+    },
+    [updateActiveLayout, activeWorktree],
+  );
 
   const closeTab = useCallback(
     (tabId: string) => {
@@ -282,12 +309,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
             slots[slot] = parked.id;
             return { ...layout, [key]: open, slots };
           }
-          const tab: TerminalTab = {
-            id: makeId(),
-            title: shellName,
-            fontZoom: 0,
-            worktree: activeWorktree!,
-          };
+          const tab = makeTab(activeWorktree!, shellName, null);
           slots[slot] = tab.id;
           return { ...layout, [key]: open, slots, tabs: [...layout.tabs, tab] };
         }
@@ -375,6 +397,10 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
   }, [drag]);
 
   const beginDrag = useCallback((tabId: string, x: number, y: number) => {
+    // Prevent native text selection window-wide while dragging (WKWebView
+    // would otherwise select workspace text under the pointer and swallow
+    // the mousemove/mouseup events driving the drag).
+    document.body.classList.add("ol-dragging");
     setDrag({ tabId, x, y, overSlot: null });
   }, []);
 
@@ -392,6 +418,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const endDrag = useCallback(() => {
+    document.body.classList.remove("ol-dragging");
     const d = dragRef.current;
     if (d && d.overSlot !== null) {
       dropTabOnSlot(d.tabId, d.overSlot);
@@ -399,12 +426,16 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
     setDrag(null);
   }, [dropTabOnSlot]);
 
-  // While dragging, track the pointer globally; end on mouseup.
+  // While dragging, track the pointer globally; end on mouseup. preventDefault
+  // stops native text selection from ever starting under the cursor.
   useEffect(() => {
     if (!drag) return;
-    const onMove = (e: MouseEvent) => moveDrag(e.clientX, e.clientY);
+    const onMove = (e: MouseEvent) => {
+      e.preventDefault();
+      moveDrag(e.clientX, e.clientY);
+    };
     const onUp = () => endDrag();
-    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mousemove", onMove, { passive: false });
     window.addEventListener("mouseup", onUp);
     return () => {
       window.removeEventListener("mousemove", onMove);
@@ -437,6 +468,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
       slotOf,
       setActiveWorktree,
       newTab,
+      launchRunnable,
       closeTab,
       selectTab,
       focusSlot,
@@ -460,6 +492,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
       slotOf,
       setActiveWorktree,
       newTab,
+      launchRunnable,
       closeTab,
       selectTab,
       focusSlot,

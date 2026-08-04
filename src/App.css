@@ -137,6 +137,14 @@ body,
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
+/* During a tab drag, block native text selection everywhere (WKWebView would
+   select text under the pointer and break the drag's mousemove/mouseup). */
+body.ol-dragging,
+body.ol-dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .host-hidden {
   display: none;
 }

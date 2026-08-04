@@ -83,3 +83,57 @@
   justify-content: center;
   font-size: 10px;
 }
+
+/* ── Runnable config ───────────────────────────────────────── */
+
+.runnable-row {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ol-scale));
+  padding: calc(4px * var(--ol-scale)) 0;
+}
+
+.runnable-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.runnable-name {
+  font-size: calc(13px * var(--ol-scale));
+  color: var(--ol-text);
+  font-weight: 500;
+}
+
+.runnable-commands {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: calc(11px * var(--ol-scale));
+  color: var(--ol-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runnable-editor {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ol-scale));
+  padding: calc(8px * var(--ol-scale));
+  border: 1px solid var(--ol-border);
+  border-radius: 6px;
+  background: var(--ol-surface);
+  margin-top: calc(8px * var(--ol-scale));
+}
+
+.runnable-command-row {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ol-scale));
+}
+
+.runnable-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ol-scale));
+}

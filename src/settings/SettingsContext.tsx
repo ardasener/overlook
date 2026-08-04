@@ -33,13 +33,30 @@ export const TERM_FONT_OPTIONS: { id: TermFontId; name: string }[] = [
 
 export { TERM_SIZE_MIN, TERM_SIZE_MAX };
 
+/** A configurable runnable app: a name plus one command per spawned tab. */
+export interface Runnable {
+  id: string;
+  name: string;
+  /** Each entry is a command string, whitespace-split into argv at launch. */
+  commands: string[];
+}
+
 export interface Settings {
   themeId: string;
   uiFont: UiFontId;
   uiScale: number;
   termFont: TermFontId;
   termSize: number;
+  runnables: Runnable[];
 }
+
+/** Seed runnables for a fresh install. User-editable like any other entry. */
+const DEFAULT_RUNNABLES: Runnable[] = [
+  { id: "runnable-ai", name: "AI", commands: ["opencode"] },
+  { id: "runnable-editor", name: "Editor", commands: ["micro"] },
+  { id: "runnable-monitor", name: "Monitor", commands: ["btop"] },
+  { id: "runnable-dev", name: "Dev", commands: ["opencode", "micro", "btop"] },
+];
 
 const DEFAULTS: Settings = {
   themeId: "nord",
@@ -47,6 +64,7 @@ const DEFAULTS: Settings = {
   uiScale: UI_SCALE_DEFAULT,
   termFont: "fira-code",
   termSize: 13,
+  runnables: DEFAULT_RUNNABLES,
 };
 
 const STORAGE_KEY = "overlook-settings";
@@ -88,6 +106,17 @@ function loadSettings(): Settings {
         typeof parsed.termSize === "number" && Number.isFinite(parsed.termSize)
           ? clampSize(parsed.termSize)
           : DEFAULTS.termSize,
+      runnables:
+        Array.isArray(parsed.runnables) && parsed.runnables.length > 0
+          ? parsed.runnables.filter(
+              (r) =>
+                r &&
+                typeof r.id === "string" &&
+                typeof r.name === "string" &&
+                Array.isArray(r.commands) &&
+                r.commands.every((c) => typeof c === "string"),
+            )
+          : DEFAULT_RUNNABLES,
     };
   } catch {
     return DEFAULTS;

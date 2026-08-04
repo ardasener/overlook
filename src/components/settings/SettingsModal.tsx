@@ -1,5 +1,6 @@
-import { CheckOutlined } from "@ant-design/icons";
-import { InputNumber, Modal, Select, Tooltip } from "antd";
+import { useState } from "react";
+import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Input, InputNumber, Modal, Select, Tooltip } from "antd";
 import { PALETTES } from "../../themes/palettes";
 import {
   TERM_FONT_OPTIONS,
@@ -11,6 +12,7 @@ import {
   UI_SCALE_STEP,
   snapUiScale,
   useSettings,
+  type Runnable,
 } from "../../settings/SettingsContext";
 import { TERM_FONT_STACKS } from "../../themes/xterm";
 import "./SettingsModal.css";
@@ -20,14 +22,73 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+/** Fresh runnable with a stable unique id. */
+function makeRunnableId(): string {
+  return `runnable-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Draft form state for a runnable being added or edited. */
+interface RunnableDraft {
+  name: string;
+  commands: string[];
+}
+
+const EMPTY_DRAFT: RunnableDraft = { name: "", commands: [""] };
+
+/** Sentinel editingId marking the "adding a new runnable" editor state. */
+const NEW_RUNNABLE_ID = "__new__";
+
 function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { settings, update } = useSettings();
+
+  // Runnable editor: null = closed; NEW_RUNNABLE_ID = adding; else editing.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<RunnableDraft>(EMPTY_DRAFT);
+
+  const resetEditor = () => {
+    setEditingId(null);
+    setDraft({ ...EMPTY_DRAFT });
+  };
+
+  const startEdit = (r: Runnable) => {
+    setEditingId(r.id);
+    setDraft({ name: r.name, commands: [...r.commands] });
+  };
+
+  const startAdd = () => {
+    setEditingId(NEW_RUNNABLE_ID);
+    setDraft({ ...EMPTY_DRAFT });
+  };
+
+  const saveDraft = () => {
+    const name = draft.name.trim();
+    const commands = draft.commands.map((c) => c.trim()).filter((c) => c.length > 0);
+    if (!name || commands.length === 0) return;
+    if (editingId !== null && editingId !== NEW_RUNNABLE_ID) {
+      update({
+        runnables: settings.runnables.map((r) =>
+          r.id === editingId ? { ...r, name, commands } : r,
+        ),
+      });
+    } else {
+      update({ runnables: [...settings.runnables, { id: makeRunnableId(), name, commands }] });
+    }
+    resetEditor();
+  };
+
+  const removeRunnable = (id: string) => {
+    update({ runnables: settings.runnables.filter((r) => r.id !== id) });
+    if (editingId === id) resetEditor();
+  };
 
   return (
     <Modal
       title="Settings"
       open={open}
-      onCancel={onClose}
+      onCancel={() => {
+        resetEditor();
+        onClose();
+      }}
       footer={null}
       width={560}
       centered
@@ -127,6 +188,104 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
             />
           </Tooltip>
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">Runnables</h3>
+
+        {settings.runnables.map((r) => (
+          <div key={r.id} className="runnable-row">
+            <div className="runnable-meta">
+              <span className="runnable-name">{r.name}</span>
+              <span className="runnable-commands">{r.commands.join("  ")}</span>
+            </div>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => startEdit(r)}
+              aria-label={`Edit ${r.name}`}
+            />
+            <Button
+              type="text"
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => removeRunnable(r.id)}
+              aria-label={`Delete ${r.name}`}
+            />
+          </div>
+        ))}
+
+        {editingId !== null ? (
+          <div className="runnable-editor">
+            <Input
+              size="small"
+              placeholder="Name (e.g. Monitor)"
+              value={draft.name}
+              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            />
+            {draft.commands.map((cmd, i) => (
+              <div key={i} className="runnable-command-row">
+                <Input
+                  size="small"
+                  placeholder="Command (e.g. btop --color=dark)"
+                  value={cmd}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      commands: d.commands.map((c, j) => (j === i ? e.target.value : c)),
+                    }))
+                  }
+                />
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  disabled={draft.commands.length <= 1}
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      commands: d.commands.filter((_, j) => j !== i),
+                    }))
+                  }
+                  aria-label="Remove command"
+                />
+              </div>
+            ))}
+            <Button
+              type="dashed"
+              size="small"
+              block
+              icon={<PlusOutlined />}
+              onClick={() => setDraft((d) => ({ ...d, commands: [...d.commands, ""] }))}
+            >
+              Add command
+            </Button>
+            <div className="runnable-editor-actions">
+              <Button size="small" onClick={resetEditor}>
+                Cancel
+              </Button>
+              <Button
+                size="small"
+                type="primary"
+                onClick={saveDraft}
+                disabled={!draft.name.trim() || draft.commands.every((c) => !c.trim())}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            type="dashed"
+            size="small"
+            block
+            icon={<PlusOutlined />}
+            onClick={startAdd}
+          >
+            Add runnable
+          </Button>
+        )}
       </section>
     </Modal>
   );

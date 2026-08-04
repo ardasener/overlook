@@ -223,19 +223,30 @@ pub fn foreground_process(_shell_pid: u32) -> Option<String> {
     None
 }
 
-/// Open a PTY, spawn the resolved shell in it, and start the io threads.
-/// Returns the session; the caller registers it with the manager.
+/// Open a PTY, spawn the shell (or a direct-exec command) in it, and start the
+/// io threads. Returns the session; the caller registers it with the manager.
 pub fn spawn_session(
     id: u32,
     cwd: Option<String>,
     size: PtySize,
     on_event: Channel<TerminalEvent>,
     manager: PtyManager,
+    command: Option<Vec<String>>,
 ) -> Result<Arc<Session>, String> {
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(size).map_err(|e| e.to_string())?;
 
-    let mut cmd = CommandBuilder::new(resolve_shell());
+    let mut cmd = match command {
+        // Runnable app: direct-exec the argv (no shell wrapper).
+        Some(argv) => {
+            let mut builder = CommandBuilder::new(
+                argv.first().cloned().ok_or("command must not be empty")?,
+            );
+            builder.args(&argv[1..]);
+            builder
+        }
+        None => CommandBuilder::new(resolve_shell()),
+    };
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
@@ -460,7 +471,7 @@ mod tests {
             Ok(())
         });
 
-        let session = spawn_session(1, None, PtySize::default(), channel, manager.clone()).unwrap();
+        let session = spawn_session(1, None, PtySize::default(), channel, manager.clone(), None).unwrap();
 
         session.write(b"echo roundtrip-ok\r\n").unwrap();
 
@@ -482,6 +493,49 @@ mod tests {
 
         session.kill();
         manager.remove(1);
+    }
+
+    /// A direct-exec command session (runnable apps) must run the given argv
+    /// and stream its output through the Channel.
+    #[test]
+    fn command_session_executes_argv() {
+        use std::sync::mpsc;
+        use tauri::ipc::InvokeResponseBody;
+
+        let manager = PtyManager::default();
+        let (tx, rx) = mpsc::channel::<TerminalEvent>();
+        let channel = Channel::new(move |body| {
+            let json = match &body {
+                InvokeResponseBody::Json(s) => s.clone(),
+                InvokeResponseBody::Raw(v) => String::from_utf8_lossy(v).into_owned(),
+            };
+            let event: TerminalEvent = serde_json::from_str(&json).expect("valid event json");
+            let _ = tx.send(event);
+            Ok(())
+        });
+
+        let argv = vec!["/bin/sh".to_string(), "-c".to_string(), "echo run-test-ok".to_string()];
+        let session =
+            spawn_session(2, None, PtySize::default(), channel, manager.clone(), Some(argv)).unwrap();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut saw_output = false;
+        while std::time::Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_millis(500)) {
+                Ok(TerminalEvent::Output { data, .. }) => {
+                    if String::from_utf8_lossy(&data).contains("run-test-ok") {
+                        saw_output = true;
+                        break;
+                    }
+                }
+                Ok(TerminalEvent::Exit { .. }) => break,
+                Err(_) => break,
+            }
+        }
+        assert!(saw_output, "command output never arrived through the channel");
+
+        session.kill();
+        manager.remove(2);
     }
 
     /// The shell is the leaf → idle terminal → no process name.

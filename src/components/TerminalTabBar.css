@@ -7,29 +7,47 @@
   border-bottom: 1px solid var(--ol-border);
 }
 
-/* Control-only strip: content is rendered by the split layout. */
-.terminal-tabs {
+/* Control-only strip: content is rendered by the split layout. One row that
+   scrolls horizontally (no visible scrollbar) when tabs overflow. */
+.tab-strip {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
 }
 
-.terminal-tabs .ant-tabs-content-holder {
-  display: none;
+.tab-strip::-webkit-scrollbar {
+  display: none; /* WebKit/WKWebView */
 }
 
-.terminal-tabs .ant-tabs-nav {
-  margin-bottom: 0;
-}
-
-.terminal-tabs .ant-tabs-tab {
-  padding: 4px 0;
-}
-
-/* Tab labels are pointer-drag sources; don't select text while dragging. */
-.terminal-tabs .ant-tabs-tab .terminal-tab-label {
+/* Tab tags are pointer-drag sources; don't select text while dragging. */
+.terminal-tab-tag {
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
+  margin-inline-end: 0;
+  border: 1px solid var(--ol-border);
+  background: var(--ol-surface);
+  color: var(--ol-text-muted);
+  border-radius: 4px;
+  font-size: calc(12px * var(--ol-scale));
+  line-height: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.terminal-tab-tag .ant-tag-close-icon {
+  color: var(--ol-text-muted);
+}
+
+.terminal-tab-tag:hover {
+  border-color: var(--ol-primary);
 }
 
 .tabbar-actions {
@@ -37,4 +55,56 @@
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+/* ── Runnable launcher popover ─────────────────────────────── */
+
+.launcher-popover {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ol-scale));
+  width: 260px;
+}
+
+.launcher-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.launcher-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: calc(6px * var(--ol-scale)) calc(8px * var(--ol-scale));
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.launcher-row:hover,
+.launcher-row-active {
+  background: color-mix(in srgb, var(--ol-primary) 14%, transparent);
+}
+
+.launcher-name {
+  font-size: calc(12px * var(--ol-scale));
+  font-weight: 600;
+  color: var(--ol-text);
+}
+
+.launcher-commands {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: calc(11px * var(--ol-scale));
+  color: var(--ol-text-muted);
+}
+
+.launcher-empty {
+  padding: calc(8px * var(--ol-scale));
+  font-size: calc(12px * var(--ol-scale));
+  color: var(--ol-text-muted);
 }

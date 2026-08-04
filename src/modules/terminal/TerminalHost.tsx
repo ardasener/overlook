@@ -39,13 +39,14 @@ interface TerminalHostProps {
  */
 function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
   const sessionIdRef = useRef<number | null>(null);
+  const spawningRef = useRef(false);
   const terminalRef = useRef<Terminal | null>(null);
   const visibleRef = useRef(visible);
   const titleRef = useRef<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   const { settings, palette } = useSettings();
-  const { tabOf, shellName, focusSlot, zoomTab, renameTab } = useTerminalLayout();
+  const { tabOf, shellName, focusSlot, zoomTab, renameTab, closeTab } = useTerminalLayout();
 
   const tab = tabOf(tabId);
   const fontZoom = tab?.fontZoom ?? 0;
@@ -83,6 +84,7 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     });
     const resizeSub = terminal.onResize(({ cols, rows }) => {
       const id = sessionIdRef.current;
+      console.debug(`[pty] onResize tab=${tabId} cols=${cols} rows=${rows} session=${id}`);
       if (id != null) void ptyResize(id, cols, rows);
     });
     return () => {
@@ -127,12 +129,15 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
 
   // Auto-title: poll the foreground process while visible; rename when it
   // differs from the current title, reverting to the shell name when idle.
+  // Runnable tabs have a deterministic exe-name title and are skipped — the
+  // poller cannot name a direct-exec process (it IS the session's shell pid).
   useEffect(() => {
+    if (tab?.command != null) return;
     titleRef.current = tab?.title;
-  }, [tab?.title]);
+  }, [tab?.title, tab?.command]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || tab?.command != null) return;
     let cancelled = false;
     const interval = setInterval(() => {
       const id = sessionIdRef.current;
@@ -154,37 +159,63 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
   }, [visible, tabId, shellName, renameTab]);
 
   // Spawn the PTY session once the terminal is ready; tear it down on unmount
-  // (tab close). StrictMode double-mounts effects in dev: the cancelled guard
-  // closes any session opened by the first mount so exactly one shell survives.
+  // (tab close). React StrictMode mounts effects twice in dev; the synchronous
+  // `spawningRef` guard makes the twin mount a no-op so exactly ONE shell is
+  // spawned per tab — otherwise a doomed first shell would write its startup
+  // output (a bare prompt) into the terminal before being killed.
   useEffect(() => {
-    let cancelled = false;
-    let openedId: number | null = null;
+    if (sessionIdRef.current !== null || spawningRef.current) return;
+    // The terminal is created by `useTerminal`'s effect and synced to
+    // `terminalRef` a commit later; wait for it so fit() can measure the real
+    // size before the PTY spawns (a pre-terminal spawn would seed 80x24 and,
+    // for a settled visible tab, never get refitted).
+    const term = terminalRef.current;
+    if (!term?.element) return;
+    spawningRef.current = true;
 
-    // Every tab belongs to a worktree; its shell starts there.
+    // Every tab belongs to a worktree; its shell starts there. Runnable tabs
+    // direct-exec their argv instead. Fit first (when visible) so the PTY is
+    // seeded at the terminal's real size and TUIs never start at the 80x24
+    // default and get resized mid-init; the ResizeObserver keeps it correct.
     const cwd = tab?.worktree ?? null;
+    const command = tab?.command ?? null;
+    if (visibleRef.current) {
+      try {
+        fitAddonRef.current?.fit();
+      } catch {
+        /* hidden/zero-sized container — fall back below */
+      }
+    }
+    const cols = Math.max(2, terminalRef.current?.cols ?? 80);
+    const rows = Math.max(2, terminalRef.current?.rows ?? 24);
+    console.debug(`[pty] spawn tab=${tabId} visible=${visibleRef.current} cols=${cols} rows=${rows}`, command ? `cmd=${command.join(" ")}` : "shell");
 
     void ptyOpen(cwd, (event) => {
       if (event.event === "output") {
         terminalRef.current?.write(new Uint8Array(event.data.data));
+      } else if (event.event === "exit" && command !== null) {
+        // Runnable tab: the process ending closes the tab.
+        closeTab(tabId);
       }
-    })
+    }, command, cols, rows)
       .then((id) => {
-        if (cancelled) {
-          void ptyClose(id);
-          return;
-        }
-        openedId = id;
+        spawningRef.current = false;
         sessionIdRef.current = id;
       })
-      .catch((err: unknown) => setError(String(err)));
+      .catch((err: unknown) => {
+        spawningRef.current = false;
+        setError(String(err));
+      });
 
     return () => {
-      cancelled = true;
-      sessionIdRef.current = null;
-      if (openedId != null) void ptyClose(openedId);
+      const id = sessionIdRef.current;
+      if (id !== null) {
+        sessionIdRef.current = null;
+        void ptyClose(id);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId]);
+  }, [tabId, terminal]);
 
   // Fit only while visible; hidden hosts are display:none and would fit to
   // zero cols/rows. Refit when a host becomes visible again.
@@ -193,6 +224,7 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
       const term = terminalRef.current;
       if (!term?.element) return; // xterm not opened yet
       fitAddonRef.current?.fit();
+      console.debug(`[pty] fit(visible) tab=${tabId} -> cols=${term.cols} rows=${term.rows}`);
     };
     if (visible) {
       fit();
@@ -206,10 +238,29 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     const observer = new ResizeObserver(() => {
       if (!visibleRef.current) return;
       fitAddonRef.current?.fit();
+      console.debug(`[pty] fit(observer) tab=${tabId} -> cols=${terminalRef.current?.cols} rows=${terminalRef.current?.rows}`);
     });
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, [visible, containerRef, fitAddonRef]);
+
+  // Terminal fonts load lazily; until they do, xterm's cell metrics are wrong
+  // and fit computes an incorrect size. Refit once the fonts settle so the
+  // PTY (and TUIs) get the true dimensions.
+  useEffect(() => {
+    if (!visible) return;
+    const fontsReady = document.fonts?.ready;
+    if (!fontsReady) return;
+    let cancelled = false;
+    void fontsReady.then(() => {
+      if (cancelled || !visibleRef.current) return;
+      fitAddonRef.current?.fit();
+      console.debug(`[pty] fit(fonts-ready) tab=${tabId} -> cols=${terminalRef.current?.cols} rows=${terminalRef.current?.rows}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, fitAddonRef]);
 
   return (
     <div

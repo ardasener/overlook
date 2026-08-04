@@ -59,14 +59,36 @@ impl PtyManager {
 }
 
 /// Spawn a new shell PTY session and stream its output to `on_event`.
+/// When `command` is provided, that argv is direct-executed instead of the
+/// shell (used by runnable apps); the session otherwise behaves identically.
+/// `cols`/`rows` seed the PTY at the terminal's fitted size so TUIs never
+/// start at the 80x24 default and get resized mid-init.
 #[tauri::command]
 pub fn pty_open(
     manager: State<PtyManager>,
     on_event: Channel<TerminalEvent>,
     cwd: Option<String>,
+    command: Option<Vec<String>>,
+    cols: u16,
+    rows: u16,
 ) -> Result<u32, String> {
+    eprintln!(
+        "[pty] open cols={cols} rows={rows} cwd={cwd:?} cmd={command:?} (debug)"
+    );
     let id = manager.allocate_id();
-    let session = spawn_session(id, cwd, PtySize::default(), on_event, manager.inner().clone())?;
+    let session = spawn_session(
+        id,
+        cwd,
+        PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        },
+        on_event,
+        manager.inner().clone(),
+        command,
+    )?;
     manager.insert(session.clone());
     // Reap a shell that died before it was registered.
     if session.has_exited() {
@@ -99,6 +121,7 @@ pub fn pty_resize(
     let session = manager
         .get(session_id)
         .ok_or_else(|| format!("no such session: {session_id}"))?;
+    eprintln!("[pty] resize session={session_id} cols={cols} rows={rows} (debug)");
     session
         .resize(PtySize {
             rows,

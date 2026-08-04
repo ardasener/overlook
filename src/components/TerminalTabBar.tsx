@@ -1,16 +1,18 @@
-import type { CSSProperties, MouseEvent } from "react";
-import { useRef } from "react";
-import { Button, Tabs, Tooltip } from "antd";
+import type { CSSProperties, KeyboardEvent, MouseEvent, WheelEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Button, Input, Popover, Tag, Tooltip } from "antd";
 import {
   ColumnWidthOutlined,
   InsertRowBelowOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   PlusOutlined,
+  RocketOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
 import { useSettings } from "../settings/SettingsContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
+import { splitCommand } from "../modules/terminal/pty";
 import { isMacOS } from "../lib/platform";
 import "./TerminalTabBar.css";
 
@@ -31,12 +33,31 @@ function TerminalTabBar({
   workspacesOpen,
   onToggleWorkspaces,
 }: TerminalTabBarProps) {
-  const { state, slotOf, newTab, closeTab, selectTab, toggleVertical, toggleBottom, beginDrag } =
+  const { state, slotOf, newTab, closeTab, selectTab, toggleVertical, toggleBottom, beginDrag, launchRunnable } =
     useTerminalLayout();
-  const { palette } = useSettings();
+  const { settings, palette } = useSettings();
 
   const focusedTabId =
     state.focusedSlot < state.slots.length ? state.slots[state.focusedSlot] : null;
+
+  // Runnable launcher popover state.
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  const [launcherQuery, setLauncherQuery] = useState("");
+
+  const launch = (commands: string[]) => {
+    setLauncherOpen(false);
+    setLauncherQuery("");
+    launchRunnable(commands.map((c) => splitCommand(c)));
+  };
+
+  const filteredRunnables = settings.runnables.filter((r) =>
+    r.name.toLowerCase().includes(launcherQuery.trim().toLowerCase()),
+  );
+
+  const handleLauncherKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || filteredRunnables.length === 0) return;
+    launch(filteredRunnables[0].commands);
+  };
 
   // Press origin for pointer-drag initiation (mousedown → threshold → beginDrag).
   const pressRef = useRef<{ tabId: string; x: number; y: number } | null>(null);
@@ -62,46 +83,68 @@ function TerminalTabBar({
     pressRef.current = null;
   };
 
+  // Strip ref for wheel scrolling + auto-scroll-to-active.
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const activeTagRef = useRef<HTMLSpanElement | null>(null);
+
+  // Wheel scrolls the strip horizontally only when content overflows.
+  const handleStripWheel = (e: WheelEvent) => {
+    const strip = stripRef.current;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    strip.scrollLeft += e.deltaY + e.deltaX;
+  };
+
+  // Bring the focused tag into view when the focused tab changes.
+  useEffect(() => {
+    activeTagRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [focusedTabId]);
+
   return (
     <div
       className="terminal-tabbar"
       data-tauri-drag-region="deep"
       style={isMacOS() ? ({ paddingLeft: 80 } as CSSProperties) : undefined}
     >
-      <Tabs
-        className="terminal-tabs"
-        type="editable-card"
-        size="small"
-        hideAdd
-        activeKey={focusedTabId ?? undefined}
-        onChange={(key) => selectTab(key)}
-        onEdit={(key, action) => {
-          if (action === "remove") closeTab(String(key));
-        }}
-        items={state.tabs.map((tab) => {
+      <div
+        ref={stripRef}
+        className="tab-strip"
+        onWheel={handleStripWheel}
+        data-tauri-drag-region="deep"
+      >
+        {state.tabs.map((tab) => {
           const slot = slotOf(tab.id);
           const focused = tab.id === focusedTabId;
-          const style: CSSProperties = {
-            color: slot !== null ? palette.accents[slot] : "var(--ol-text-muted)",
+          const accent = slot !== null ? palette.accents[slot] : undefined;
+          const tagStyle: CSSProperties = {
+            color: accent ?? "var(--ol-text-muted)",
             fontWeight: focused ? 600 : 400,
           };
-          return {
-            key: tab.id,
-            label: (
-              <span
-                className="terminal-tab-label"
-                onMouseDown={handleLabelMouseDown(tab.id)}
-                onMouseMove={handleLabelMouseMove(tab.id)}
-                onMouseUp={clearPress}
-                style={style}
-              >
-                {tab.title}
-              </span>
-            ),
-            closable: true,
-          };
+          if (focused) {
+            tagStyle.borderColor = accent;
+            tagStyle.background = accent ? `${accent}1a` : undefined;
+          }
+          return (
+            <Tag
+              key={tab.id}
+              ref={focused ? activeTagRef : undefined}
+              closable
+              className="terminal-tab-tag"
+              style={tagStyle}
+              onClick={() => selectTab(tab.id)}
+              onClose={(e) => {
+                e.preventDefault();
+                closeTab(tab.id);
+              }}
+              onMouseDown={handleLabelMouseDown(tab.id)}
+              onMouseMove={handleLabelMouseMove(tab.id)}
+              onMouseUp={clearPress}
+              onMouseLeave={clearPress}
+            >
+              {tab.title}
+            </Tag>
+          );
         })}
-      />
+      </div>
       <div className="tabbar-actions">
         <Tooltip title={workspacesOpen ? "Hide workspaces" : "Show workspaces"}>
           <Button
@@ -130,6 +173,55 @@ function TerminalTabBar({
             aria-label="New terminal"
           />
         </Tooltip>
+        <Popover
+          trigger="click"
+          open={launcherOpen}
+          onOpenChange={(open) => {
+            setLauncherOpen(open);
+            if (open) setLauncherQuery("");
+          }}
+          placement="bottomRight"
+          content={
+            <div className="launcher-popover">
+              <Input
+                size="small"
+                autoFocus
+                placeholder="Search runnables"
+                value={launcherQuery}
+                onChange={(e) => setLauncherQuery(e.target.value)}
+                onKeyDown={handleLauncherKeyDown}
+                allowClear
+              />
+              <div className="launcher-list">
+                {filteredRunnables.length === 0 ? (
+                  <div className="launcher-empty">No runnables match</div>
+                ) : (
+                  filteredRunnables.map((r, i) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      className={`launcher-row${i === 0 ? " launcher-row-active" : ""}`}
+                      onClick={() => launch(r.commands)}
+                      onMouseEnter={() => undefined}
+                    >
+                      <span className="launcher-name">{r.name}</span>
+                      <span className="launcher-commands">{r.commands.join("  ")}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          }
+        >
+          <Tooltip title="Run an app">
+            <Button
+              type="text"
+              size="small"
+              icon={<RocketOutlined />}
+              aria-label="Run an app"
+            />
+          </Tooltip>
+        </Popover>
         <Tooltip title="Toggle vertical split">
           <Button
             type="text"
