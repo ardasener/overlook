@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Layout } from "antd";
 import WorkspaceSidebar from "./components/WorkspaceSidebar";
 import SettingsModal from "./components/settings/SettingsModal";
@@ -6,6 +6,8 @@ import TerminalTabBar from "./components/TerminalTabBar";
 import SplitLayout from "./components/SplitLayout";
 import { TerminalLayoutProvider, useTerminalLayout } from "./layout/TerminalLayoutContext";
 import { WorkspaceProvider, useWorkspace } from "./workspace/WorkspaceContext";
+import { useKeyboardShortcuts } from "./shortcuts/useKeyboardShortcuts";
+import { registerShortcutAction } from "./shortcuts/actionRegistry";
 import "./App.css";
 
 const { Sider, Content } = Layout;
@@ -25,6 +27,20 @@ function AppShell() {
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const { projects } = useWorkspace();
   const { activeWorktree, setActiveWorktree } = useTerminalLayout();
+  useKeyboardShortcuts();
+
+  // Stable identity for the sidebar's onReveal (avoids re-registering its
+  // focus shortcut on every render).
+  const revealWorkspaces = useCallback(() => setWorkspacesOpen(true), []);
+
+  // App-level shortcut actions that live here (panel visibility).
+  useEffect(() => {
+    const toggle = () => setWorkspacesOpen((open) => !open);
+    const unregToggle = registerShortcutAction("toggleSidebar", toggle);
+    return () => {
+      unregToggle();
+    };
+  }, []);
 
   // Activate the first project's default worktree once projects load.
   useEffect(() => {
@@ -52,7 +68,7 @@ function AppShell() {
           collapsedWidth={0}
           trigger={null}
         >
-          <WorkspaceSidebar />
+          <WorkspaceSidebar onReveal={revealWorkspaces} />
         </Sider>
         <Content className="app-content">
           <SplitLayout />

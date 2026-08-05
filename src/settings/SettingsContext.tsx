@@ -16,6 +16,8 @@ import {
   type UiFontId,
 } from "../themes/antd";
 import { TERM_SIZE_MAX, TERM_SIZE_MIN, type TermFontId } from "../themes/xterm";
+import type { ActionId, Keybinding } from "../shortcuts/keybindings";
+import { DEFAULT_KEYBINDINGS } from "../shortcuts/keybindings";
 
 export const UI_FONT_OPTIONS: { id: UiFontId; name: string }[] = [
   { id: "inter", name: "Inter" },
@@ -48,6 +50,8 @@ export interface Settings {
   termFont: TermFontId;
   termSize: number;
   runnables: Runnable[];
+  /** Per-action keyboard shortcuts (primary + optional alternative). */
+  keybindings: Record<ActionId, Keybinding>;
 }
 
 /** Seed runnables for a fresh install. User-editable like any other entry. */
@@ -65,6 +69,7 @@ const DEFAULTS: Settings = {
   termFont: "fira-code",
   termSize: 13,
   runnables: DEFAULT_RUNNABLES,
+  keybindings: DEFAULT_KEYBINDINGS,
 };
 
 const STORAGE_KEY = "overlook-settings";
@@ -117,10 +122,28 @@ function loadSettings(): Settings {
                 r.commands.every((c) => typeof c === "string"),
             )
           : DEFAULT_RUNNABLES,
+      keybindings: normalizeKeybindings(parsed.keybindings),
     };
   } catch {
     return DEFAULTS;
   }
+}
+
+/** Merge stored keybindings over the defaults, keeping only valid combos. */
+function normalizeKeybindings(
+  stored: Partial<Record<ActionId, Keybinding>> | undefined,
+): Record<ActionId, Keybinding> {
+  const out: Record<ActionId, Keybinding> = { ...DEFAULT_KEYBINDINGS };
+  if (!stored || typeof stored !== "object") return out;
+  for (const action of Object.keys(DEFAULT_KEYBINDINGS) as ActionId[]) {
+    const k = stored[action];
+    if (!k || typeof k.primary !== "string") continue;
+    out[action] = {
+      primary: k.primary,
+      alt: typeof k.alt === "string" ? k.alt : null,
+    };
+  }
+  return out;
 }
 
 export { loadSettings };

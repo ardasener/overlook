@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Input, InputNumber, Modal, Select, Tooltip } from "antd";
+import { useEffect, useState } from "react";
+import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined, RedoOutlined } from "@ant-design/icons";
+import { Button, Input, InputNumber, Modal, Select, Tabs, Tooltip } from "antd";
 import { PALETTES } from "../../themes/palettes";
 import {
   TERM_FONT_OPTIONS,
@@ -15,6 +15,14 @@ import {
   type Runnable,
 } from "../../settings/SettingsContext";
 import { TERM_FONT_STACKS } from "../../themes/xterm";
+import {
+  ACTION_LABELS,
+  ACTIONS,
+  DEFAULT_KEYBINDINGS,
+  comboFromEvent,
+  formatCombo,
+  type ActionId,
+} from "../../shortcuts/keybindings";
 import "./SettingsModal.css";
 
 interface SettingsModalProps {
@@ -37,6 +45,12 @@ const EMPTY_DRAFT: RunnableDraft = { name: "", commands: [""] };
 
 /** Sentinel editingId marking the "adding a new runnable" editor state. */
 const NEW_RUNNABLE_ID = "__new__";
+
+/** A combo captured while recording: action id + which slot (primary/alt). */
+interface RecordingState {
+  action: ActionId;
+  slot: "primary" | "alt";
+}
 
 function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { settings, update } = useSettings();
@@ -81,6 +95,64 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
     if (editingId === id) resetEditor();
   };
 
+  // ── Keybinding recording ──────────────────────────────────────────────
+
+  const [recording, setRecording] = useState<RecordingState | null>(null);
+
+  const startRecording = (action: ActionId, slot: "primary" | "alt") => {
+    setRecording({ action, slot });
+  };
+
+  const cancelRecording = () => setRecording(null);
+
+  const saveRecording = (e: KeyboardEvent) => {
+    if (!recording) return;
+    // Escape clears the alt binding (when recording one) or cancels.
+    if (e.key === "Escape") {
+      if (recording.slot === "alt") {
+        const current = settings.keybindings[recording.action];
+        update({
+          keybindings: {
+            ...settings.keybindings,
+            [recording.action]: { ...current, alt: null },
+          },
+        });
+      }
+      cancelRecording();
+      return;
+    }
+    const modHeld = e.metaKey || e.ctrlKey;
+    if (!modHeld) return; // require Cmd/Ctrl to protect TUI keys
+    const combo = formatCombo(comboFromEvent(e));
+    const current = settings.keybindings[recording.action];
+    const next = {
+      ...current,
+      [recording.slot]: combo,
+    };
+    update({ keybindings: { ...settings.keybindings, [recording.action]: next } });
+    cancelRecording();
+  };
+
+  // While recording, capture the next keydown anywhere in the modal.
+  useEffect(() => {
+    if (!recording) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      // stopImmediatePropagation prevents the app's shortcut hook (a sibling
+      // capture listener) from also dispatching this keypress.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      saveRecording(e);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording, settings.keybindings, update]);
+
+  const resetKeybindings = () => {
+    update({ keybindings: DEFAULT_KEYBINDINGS });
+    cancelRecording();
+  };
+
   return (
     <Modal
       title="Settings"
@@ -95,103 +167,114 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
     >
       {/* Palette CSS variables live on the document root, so the portal
           content inherits theme colors automatically. */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Appearance</h3>
+      <Tabs
+        defaultActiveKey="appearance"
+        size="small"
+        items={[
+          {
+            key: "appearance",
+            label: "Appearance",
+            children: (
+              <section className="settings-section">
+                <h3 className="settings-section-title">Appearance</h3>
 
-        <div className="settings-field">
-          <span className="settings-label">Theme</span>
-          <div className="theme-grid">
-            {PALETTES.map((p) => {
-              const selected = settings.themeId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`theme-card${selected ? " theme-card-active" : ""}`}
-                  onClick={() => update({ themeId: p.id })}
-                  style={selected ? { borderColor: p.primary } : undefined}
-                  aria-pressed={selected}
-                >
-                  <span className="theme-card-dots">
-                    <i style={{ background: p.bg }} />
-                    <i style={{ background: p.surface }} />
-                    <i style={{ background: p.text }} />
-                    <i style={{ background: p.primary }} />
-                  </span>
-                  <span className="theme-card-name">{p.name}</span>
-                  {selected && (
-                    <span
-                      className="theme-card-check"
-                      style={{ background: p.primary, color: p.primaryText }}
-                    >
-                      <CheckOutlined />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                <div className="settings-field">
+                  <span className="settings-label">Theme</span>
+                  <div className="theme-grid">
+                    {PALETTES.map((p) => {
+                      const selected = settings.themeId === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={`theme-card${selected ? " theme-card-active" : ""}`}
+                          onClick={() => update({ themeId: p.id })}
+                          style={selected ? { borderColor: p.primary } : undefined}
+                          aria-pressed={selected}
+                        >
+                          <span className="theme-card-dots">
+                            <i style={{ background: p.bg }} />
+                            <i style={{ background: p.surface }} />
+                            <i style={{ background: p.text }} />
+                            <i style={{ background: p.primary }} />
+                          </span>
+                          <span className="theme-card-name">{p.name}</span>
+                          {selected && (
+                            <span
+                              className="theme-card-check"
+                              style={{ background: p.primary, color: p.primaryText }}
+                            >
+                              <CheckOutlined />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-        <div className="settings-field">
-          <span className="settings-label">UI font</span>
-          <Select
-            value={settings.uiFont}
-            onChange={(uiFont) => update({ uiFont })}
-            style={{ width: 220 }}
-            options={UI_FONT_OPTIONS.map((o) => ({
-              value: o.id,
-              label: o.name,
-            }))}
-          />
-        </div>
+                <div className="settings-field">
+                  <span className="settings-label">UI font</span>
+                  <Select
+                    value={settings.uiFont}
+                    onChange={(uiFont) => update({ uiFont })}
+                    style={{ width: 220 }}
+                    options={UI_FONT_OPTIONS.map((o) => ({
+                      value: o.id,
+                      label: o.name,
+                    }))}
+                  />
+                </div>
 
-        <div className="settings-field">
-          <span className="settings-label">UI scale</span>
-          <Tooltip title="Relational text size multiplier">
-            <InputNumber
-              value={settings.uiScale}
-              min={UI_SCALE_MIN}
-              max={UI_SCALE_MAX}
-              step={UI_SCALE_STEP}
-              addonAfter="×"
-              onChange={(v) => update({ uiScale: snapUiScale(v ?? 1) })}
-            />
-          </Tooltip>
-        </div>
-      </section>
+                <div className="settings-field">
+                  <span className="settings-label">UI scale</span>
+                  <Tooltip title="Relational text size multiplier">
+                    <InputNumber
+                      value={settings.uiScale}
+                      min={UI_SCALE_MIN}
+                      max={UI_SCALE_MAX}
+                      step={UI_SCALE_STEP}
+                      addonAfter="×"
+                      onChange={(v) => update({ uiScale: snapUiScale(v ?? 1) })}
+                    />
+                  </Tooltip>
+                </div>
 
-      <section className="settings-section">
-        <h3 className="settings-section-title">Terminal</h3>
+                <h3 className="settings-section-title">Terminal</h3>
 
-        <div className="settings-field">
-          <span className="settings-label">Font</span>
-          <Select
-            value={settings.termFont}
-            onChange={(termFont) => update({ termFont })}
-            style={{ width: 220 }}
-            options={TERM_FONT_OPTIONS.map((o) => ({
-              value: o.id,
-              label: <span style={{ fontFamily: TERM_FONT_STACKS[o.id] }}>{o.name}</span>,
-            }))}
-          />
-        </div>
+                <div className="settings-field">
+                  <span className="settings-label">Font</span>
+                  <Select
+                    value={settings.termFont}
+                    onChange={(termFont) => update({ termFont })}
+                    style={{ width: 220 }}
+                    options={TERM_FONT_OPTIONS.map((o) => ({
+                      value: o.id,
+                      label: <span style={{ fontFamily: TERM_FONT_STACKS[o.id] }}>{o.name}</span>,
+                    }))}
+                  />
+                </div>
 
-        <div className="settings-field">
-          <span className="settings-label">Default font size</span>
-          <Tooltip title="Baseline terminal font size; Ctrl/Cmd + scroll zooms individual panes">
-            <InputNumber
-              value={settings.termSize}
-              min={TERM_SIZE_MIN}
-              max={TERM_SIZE_MAX}
-              onChange={(v) => update({ termSize: v ?? 13 })}
-            />
-          </Tooltip>
-        </div>
-      </section>
-
-      <section className="settings-section">
-        <h3 className="settings-section-title">Runnables</h3>
+                <div className="settings-field">
+                  <span className="settings-label">Default font size</span>
+                  <Tooltip title="Baseline terminal font size; Ctrl/Cmd + scroll zooms individual panes">
+                    <InputNumber
+                      value={settings.termSize}
+                      min={TERM_SIZE_MIN}
+                      max={TERM_SIZE_MAX}
+                      onChange={(v) => update({ termSize: v ?? 13 })}
+                    />
+                  </Tooltip>
+                </div>
+              </section>
+            ),
+          },
+          {
+            key: "runnables",
+            label: "Runnables",
+            children: (
+              <section className="settings-section">
+                <h3 className="settings-section-title">Runnables</h3>
 
         {settings.runnables.map((r) => (
           <div key={r.id} className="runnable-row">
@@ -286,7 +369,63 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
             Add runnable
           </Button>
         )}
-      </section>
+              </section>
+            ),
+          },
+          {
+            key: "keybindings",
+            label: "Keybindings",
+            children: (
+              <section className="settings-section">
+                <div className="keybindings-header">
+                  <h3 className="settings-section-title">Keybindings</h3>
+                  <Button size="small" icon={<RedoOutlined />} onClick={resetKeybindings}>
+                    Reset to defaults
+                  </Button>
+                </div>
+                <div className="keybindings-list">
+                  {ACTIONS.map((action) => {
+                    const kb = settings.keybindings[action];
+                    return (
+                      <div key={action} className="keybinding-row">
+                        <span className="keybinding-label">{ACTION_LABELS[action]}</span>
+                        <div className="keybinding-slots">
+                          <Button
+                            size="small"
+                            className={
+                              recording?.action === action && recording.slot === "primary"
+                                ? "keybinding-recording"
+                                : undefined
+                            }
+                            onClick={() => startRecording(action, "primary")}
+                          >
+                            {recording?.action === action && recording.slot === "primary"
+                              ? "Press keys…"
+                              : kb?.primary}
+                          </Button>
+                          <Button
+                            size="small"
+                            className={
+                              recording?.action === action && recording.slot === "alt"
+                                ? "keybinding-recording"
+                                : undefined
+                            }
+                            onClick={() => startRecording(action, "alt")}
+                          >
+                            {recording?.action === action && recording.slot === "alt"
+                              ? "Press keys…"
+                              : (kb?.alt ?? "None")}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ),
+          },
+        ]}
+      />
     </Modal>
   );
 }

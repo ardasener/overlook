@@ -13,6 +13,7 @@ import {
 import { useSettings } from "../settings/SettingsContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
 import { splitCommand } from "../modules/terminal/pty";
+import { registerShortcutAction } from "../shortcuts/actionRegistry";
 import { isMacOS } from "../lib/platform";
 import "./TerminalTabBar.css";
 
@@ -43,10 +44,17 @@ function TerminalTabBar({
   // Runnable launcher popover state.
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
+  const [launcherIndex, setLauncherIndex] = useState(0);
+
+  // Expose opening the launcher to the keyboard hook.
+  useEffect(() => {
+    return registerShortcutAction("openLauncher", () => setLauncherOpen(true));
+  }, []);
 
   const launch = (commands: string[]) => {
     setLauncherOpen(false);
     setLauncherQuery("");
+    setLauncherIndex(0);
     launchRunnable(commands.map((c) => splitCommand(c)));
   };
 
@@ -54,9 +62,23 @@ function TerminalTabBar({
     r.name.toLowerCase().includes(launcherQuery.trim().toLowerCase()),
   );
 
+  // Keep the highlighted index in range when the query changes.
+  useEffect(() => {
+    setLauncherIndex((i) => Math.min(i, Math.max(0, filteredRunnables.length - 1)));
+  }, [filteredRunnables.length]);
+
   const handleLauncherKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== "Enter" || filteredRunnables.length === 0) return;
-    launch(filteredRunnables[0].commands);
+    if (filteredRunnables.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setLauncherIndex((i) => (i + 1) % filteredRunnables.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setLauncherIndex((i) => (i - 1 + filteredRunnables.length) % filteredRunnables.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      launch(filteredRunnables[launcherIndex].commands);
+    }
   };
 
   // Press origin for pointer-drag initiation (mousedown → threshold → beginDrag).
@@ -178,7 +200,10 @@ function TerminalTabBar({
           open={launcherOpen}
           onOpenChange={(open) => {
             setLauncherOpen(open);
-            if (open) setLauncherQuery("");
+            if (open) {
+              setLauncherQuery("");
+              setLauncherIndex(0);
+            }
           }}
           placement="bottomRight"
           content={
@@ -200,9 +225,9 @@ function TerminalTabBar({
                     <button
                       key={r.id}
                       type="button"
-                      className={`launcher-row${i === 0 ? " launcher-row-active" : ""}`}
+                      className={`launcher-row${i === launcherIndex ? " launcher-row-active" : ""}`}
                       onClick={() => launch(r.commands)}
-                      onMouseEnter={() => undefined}
+                      onMouseEnter={() => setLauncherIndex(i)}
                     >
                       <span className="launcher-name">{r.name}</span>
                       <span className="launcher-commands">{r.commands.join("  ")}</span>

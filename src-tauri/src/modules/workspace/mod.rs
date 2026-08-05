@@ -107,6 +107,35 @@ pub fn workspace_branch_exists(project: String, branch: String) -> Result<bool, 
     Ok(worktrees::branch_exists(&dir, &branch))
 }
 
+/// Whether a managed worktree has uncommitted changes.
+#[tauri::command]
+pub fn workspace_worktree_is_dirty(
+    _project: String,
+    worktree_path: String,
+) -> Result<bool, String> {
+    let dir = PathBuf::from(&worktree_path);
+    if !dir.is_dir() {
+        return Err("worktree directory not found".to_string());
+    }
+    Ok(worktrees::is_dirty(&dir))
+}
+
+/// Remove a managed worktree, optionally forcing past uncommitted changes.
+/// Validates the path lives under the app cache with the project's prefix.
+#[tauri::command]
+pub fn workspace_remove_worktree(
+    project: String,
+    worktree_path: String,
+    force: bool,
+) -> Result<(), String> {
+    let project_dir = PathBuf::from(&project);
+    let worktree_dir = PathBuf::from(&worktree_path);
+    if !project_dir.is_dir() {
+        return Err("project directory not found".to_string());
+    }
+    worktrees::remove_worktree(&project_dir, &worktree_dir, force)
+}
+
 /// Create a managed worktree for `branch` in the platform cache, forked from
 /// the default worktree's HEAD. `allow_existing` attaches an existing branch
 /// instead of creating a new one.

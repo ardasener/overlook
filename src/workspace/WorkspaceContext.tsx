@@ -39,6 +39,8 @@ interface WorkspaceContextValue {
     branch: string,
     allowExisting: boolean,
   ) => Promise<WorktreeInfo | null>;
+  worktreeIsDirty: (project: string, worktreePath: string) => Promise<boolean>;
+  removeWorktree: (project: string, worktreePath: string, force: boolean) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -123,6 +125,32 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const worktreeIsDirty = useCallback(
+    async (project: string, worktreePath: string): Promise<boolean> => {
+      try {
+        return await invoke<boolean>("workspace_worktree_is_dirty", {
+          project,
+          worktreePath,
+        });
+      } catch {
+        return true; // unknown state — prompt the user rather than deleting blind
+      }
+    },
+    [],
+  );
+
+  const removeWorktree = useCallback(
+    async (project: string, worktreePath: string, force: boolean) => {
+      try {
+        await invoke("workspace_remove_worktree", { project, worktreePath, force });
+        await refresh();
+      } catch {
+        /* ignore */
+      }
+    },
+    [refresh],
+  );
+
   const filtered = useMemo<ProjectInfo[]>(() => {
     const q = search.trim();
     if (!q) return projects;
@@ -150,8 +178,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       removeProject,
       branchExists,
       forkWorktree,
+      worktreeIsDirty,
+      removeWorktree,
     }),
-    [projects, search, filtered, refresh, addProject, removeProject, branchExists, forkWorktree],
+    [projects, search, filtered, refresh, addProject, removeProject, branchExists, forkWorktree, worktreeIsDirty, removeWorktree],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

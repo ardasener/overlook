@@ -111,6 +111,43 @@ pub fn prune_worktrees(project: &Path) {
     let _ = git(&["worktree", "prune"], project);
 }
 
+/// Whether a worktree checkout has uncommitted changes (non-empty porcelain
+/// status). Untracked files count as dirty.
+pub fn is_dirty(dir: &Path) -> bool {
+    git(&["status", "--porcelain"], dir)
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Remove a managed worktree: `git worktree remove [--force]` then delete the
+/// app's cache sidecar dir. Validates that `dir` lives under the cache with
+/// the project's prefix so the command can never touch arbitrary paths.
+pub fn remove_worktree(project: &Path, dir: &Path, force: bool) -> Result<(), String> {
+    let Some(cache) = cache_dir() else {
+        return Err("no cache directory available".to_string());
+    };
+    let dir_str = dir.to_str().ok_or("worktree path is not valid UTF-8")?;
+    // The checkout is `<cache>/overlook-<hash>-<branch>/<project_name>`; the
+    // dir's PARENT must be inside the cache and carry the project's prefix.
+    let parent = dir.parent().ok_or("worktree path has no parent")?;
+    if !parent.starts_with(&cache) {
+        return Err("worktree is not under the app cache".to_string());
+    }
+    let parent_name = parent.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let prefix = worktree_prefix(project.to_str().ok_or("project path is not UTF-8")?);
+    if !parent_name.starts_with(&prefix) {
+        return Err("worktree does not belong to this project".to_string());
+    }
+
+    if force {
+        git(&["worktree", "remove", "--force", dir_str], project)?;
+    } else {
+        git(&["worktree", "remove", dir_str], project)?;
+    }
+    // Remove the now-orphaned cache sidecar dir (git pruned its own metadata).
+    fs::remove_dir_all(parent).map_err(|e| e.to_string())
+}
+
 // ── Discovery ──────────────────────────────────────────────────────────────
 
 /// A managed worktree found by scanning the cache directory.
@@ -175,5 +212,28 @@ mod tests {
         assert_eq!(name, format!("overlook-{hash}-feat-x"));
         assert!(name.starts_with(&worktree_prefix("/tmp/demo")));
         assert!(!worktree_prefix("/tmp/demo").is_empty());
+    }
+
+    #[test]
+    fn is_dirty_detects_uncommitted_changes() {
+        let tmp = std::env::temp_dir().join(format!("ol-dirty-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        let _ = git(&["init", "-b", "main"], &tmp);
+        // A brand-new repo with no commits has an empty porcelain status.
+        assert!(!is_dirty(&tmp));
+        fs::write(tmp.join("untracked.txt"), "x").unwrap();
+        assert!(is_dirty(&tmp), "untracked files count as dirty");
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn remove_worktree_rejects_out_of_cache_paths() {
+        let tmp = std::env::temp_dir().join(format!("ol-outcache-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        let err = remove_worktree(&tmp, &tmp, false).unwrap_err();
+        assert!(err.contains("not under the app cache"), "got: {err}");
+        let _ = fs::remove_dir_all(&tmp);
     }
 }

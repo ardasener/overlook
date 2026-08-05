@@ -137,3 +137,67 @@
   justify-content: flex-end;
   gap: calc(6px * var(--ol-scale));
 }
+
+/* ── Keybindings ─────────────────────────────────────────────── */
+
+.keybindings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ol-scale));
+  margin-bottom: calc(4px * var(--ol-scale));
+}
+
+.keybindings-header .settings-section-title {
+  margin: 0;
+}
+
+.keybindings-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ol-scale));
+}
+
+.keybinding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--ol-scale));
+  padding: calc(4px * var(--ol-scale)) 0;
+}
+
+.keybinding-label {
+  flex: 1;
+  min-width: 0;
+  font-size: calc(13px * var(--ol-scale));
+  color: var(--ol-text);
+}
+
+.keybinding-slots {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ol-scale));
+  flex-shrink: 0;
+}
+
+.keybinding-slots .ant-btn {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: calc(11px * var(--ol-scale));
+  min-width: 90px;
+}
+
+.keybinding-recording {
+  border-color: var(--ol-primary) !important;
+  color: var(--ol-primary) !important;
+  animation: keybinding-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes keybinding-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ol-primary) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ol-primary) 10%, transparent);
+  }
+}

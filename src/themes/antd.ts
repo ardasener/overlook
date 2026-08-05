@@ -50,17 +50,6 @@ export function antdTheme(
         // which belongs to no palette and ignores theme changes.
         siderBg: palette.surface,
       },
-      Tabs: {
-        // Lean tab strip: the accent-colored titles carry tab/panel state,
-        // so AntD's ink bar is suppressed and cards blend with the surface.
-        cardBg: palette.surface,
-        itemColor: palette.textSecondary,
-        itemSelectedColor: palette.text,
-        itemHoverColor: palette.text,
-        inkBarColor: "transparent",
-        titleFontSize: 13,
-        horizontalItemGutter: 4,
-      },
     },
   };
 }

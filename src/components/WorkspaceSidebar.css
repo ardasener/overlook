@@ -42,6 +42,8 @@
 }
 
 .worktree-label {
+  flex: 1;
+  min-width: 0;
   color: var(--ol-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -51,6 +53,14 @@
 .workspace-tree .ant-tree-node-selected .worktree-label {
   color: var(--ol-text);
   font-weight: 600;
+}
+
+/* Visible focus ring when the tree container receives keyboard focus
+   (Cmd+4 / tab-navigation). */
+.workspace-tree:focus {
+  outline: 2px solid var(--ol-primary);
+  outline-offset: -2px;
+  border-radius: 2px;
 }
 
 /* Popover contents (add project / fork). */
