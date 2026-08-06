@@ -165,8 +165,14 @@ fn is_shell_comm(comm: &str) -> bool {
 /// Descending only through shell wrappers — never through the launched
 /// process's own children (e.g. vim's language servers) — keeps titles as the
 /// main process name. The lowest-pid child wins at each level.
+///
+/// The shell pid's OWN comm is checked first: when a command was launched via
+/// `zsh -c "<cmd>"`, the shell `exec`s the command and `shell_pid` IS the
+/// command (e.g. `btop`), with no children — so the command name comes from
+/// the pid itself rather than a child walk.
 pub fn parse_ps_output(ps_lines: &str, shell_pid: u32) -> Option<String> {
     let mut children: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
+    let mut own_comm: Option<String> = None;
     for line in ps_lines.lines() {
         let mut fields = line.split_whitespace();
         let (Some(pid), Some(ppid)) = (fields.next(), fields.next()) else {
@@ -184,10 +190,22 @@ pub fn parse_ps_output(ps_lines: &str, shell_pid: u32) -> Option<String> {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or(comm)
             .to_lowercase();
+        if pid == shell_pid {
+            own_comm = Some(comm.clone());
+        }
         children.entry(ppid).or_default().push((pid, comm));
     }
     for kids in children.values_mut() {
         kids.sort_by_key(|(pid, _)| *pid);
+    }
+
+    // The shell pid's own name is the command when the shell exec'd it
+    // (e.g. `zsh -c "btop"` becomes btop). Only trust it when it's NOT a
+    // shell; otherwise fall through to the child walk.
+    if let Some(comm) = own_comm {
+        if !is_shell_comm(&comm) {
+            return Some(comm);
+        }
     }
 
     let mut current = shell_pid;
@@ -223,26 +241,28 @@ pub fn foreground_process(_shell_pid: u32) -> Option<String> {
     None
 }
 
-/// Open a PTY, spawn the shell (or a direct-exec command) in it, and start the
-/// io threads. Returns the session; the caller registers it with the manager.
+/// Open a PTY, spawn the shell (or run a command through it) in the PTY, and
+/// start the io threads. Returns the session; the caller registers it with
+/// the manager.
 pub fn spawn_session(
     id: u32,
     cwd: Option<String>,
     size: PtySize,
     on_event: Channel<TerminalEvent>,
     manager: PtyManager,
-    command: Option<Vec<String>>,
+    command: Option<String>,
 ) -> Result<Arc<Session>, String> {
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(size).map_err(|e| e.to_string())?;
 
     let mut cmd = match command {
-        // Runnable app: direct-exec the argv (no shell wrapper).
-        Some(argv) => {
-            let mut builder = CommandBuilder::new(
-                argv.first().cloned().ok_or("command must not be empty")?,
-            );
-            builder.args(&argv[1..]);
+        // Runnable app: run the command through the interactive shell so
+        // functions/aliases and the shell's environment are available. `-c`
+        // makes the shell exit when the command finishes, preserving
+        // close-on-exit.
+        Some(command) => {
+            let mut builder = CommandBuilder::new(resolve_shell());
+            builder.args(["-i", "-c", &command]);
             builder
         }
         None => CommandBuilder::new(resolve_shell()),
@@ -436,10 +456,6 @@ mod tests {
                 }
             }
         }
-        eprintln!(
-            "interactive shell produced: {:?}",
-            String::from_utf8_lossy(&output)
-        );
 
         std::thread::sleep(STABLE_ALIVE);
         assert!(
@@ -495,10 +511,10 @@ mod tests {
         manager.remove(1);
     }
 
-    /// A direct-exec command session (runnable apps) must run the given argv
-    /// and stream its output through the Channel.
+    /// A command session (runnable apps) must run the command through the
+    /// interactive shell and stream its output through the Channel.
     #[test]
-    fn command_session_executes_argv() {
+    fn command_session_executes_through_shell() {
         use std::sync::mpsc;
         use tauri::ipc::InvokeResponseBody;
 
@@ -514,9 +530,9 @@ mod tests {
             Ok(())
         });
 
-        let argv = vec!["/bin/sh".to_string(), "-c".to_string(), "echo run-test-ok".to_string()];
+        let command = "echo run-test-ok".to_string();
         let session =
-            spawn_session(2, None, PtySize::default(), channel, manager.clone(), Some(argv)).unwrap();
+            spawn_session(2, None, PtySize::default(), channel, manager.clone(), Some(command)).unwrap();
 
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let mut saw_output = false;
@@ -543,6 +559,15 @@ mod tests {
     fn ps_parser_shell_leaf_is_none() {
         let ps = "  100  1  zsh\n  50   1  launchd\n";
         assert_eq!(parse_ps_output(ps, 100), None);
+    }
+
+    /// The shell pid's own comm is a non-shell command (the shell exec'd the
+    /// command, e.g. `zsh -c "btop"` becomes btop) → that is the foreground
+    /// process, with no child walk needed.
+    #[test]
+    fn ps_parser_exec_command_is_the_foreground_process() {
+        let ps = "  100  1  btop\n  50   1  launchd\n";
+        assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("btop"));
     }
 
     /// One direct child → its name is the foreground process.

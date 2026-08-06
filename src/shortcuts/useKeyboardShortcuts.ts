@@ -4,10 +4,15 @@ import { useSettings } from "../settings/SettingsContext";
 import { getShortcutAction } from "./actionRegistry";
 import { ACTIONS, matchesEvent, type ActionId } from "./keybindings";
 
-/** True when the event target is a text field where shortcuts must not fire
- *  (typing in search, editing runnables, etc.). xterm's hidden helper
- *  textarea is exempt — when a terminal is focused, app shortcuts still win. */
-function isTypingTarget(target: EventTarget | null): boolean {
+/** True when the event target is a text field where bare keystrokes must not
+ *  trigger shortcuts (typing in search, editing runnables, etc.). xterm's
+ *  hidden helper textarea is exempt — when a terminal is focused, app
+ *  shortcuts still win. Modifier combos (Cmd/Ctrl/Alt) bypass this entirely:
+ *  e.g. Cmd+1 must still switch terminals while the search input is focused. */
+function isTypingTarget(e: KeyboardEvent): boolean {
+  // Modifier combos are always app shortcuts, never typing.
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  const target = e.target;
   if (!(target instanceof HTMLElement)) return false;
   // Inside a terminal: the target is xterm's invisible helper textarea, which
   // must never swallow app shortcuts.
@@ -39,7 +44,7 @@ export function useKeyboardShortcuts(): void {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return;
+      if (isTypingTarget(e)) return;
 
       for (const id of ACTIONS) {
         const binding = settings.keybindings[id];
@@ -65,12 +70,15 @@ export function useKeyboardShortcuts(): void {
     switch (id) {
       case "focusSlot0":
         l.focusSlot(0);
+        getShortcutAction("focusTerminalSlot0")?.();
         break;
       case "focusSlot1":
         l.focusSlot(1);
+        getShortcutAction("focusTerminalSlot1")?.();
         break;
       case "focusSlot2":
         l.focusSlot(2);
+        getShortcutAction("focusTerminalSlot2")?.();
         break;
       case "focusSidebar":
         getShortcutAction("focusSidebar")?.();

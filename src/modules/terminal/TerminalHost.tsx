@@ -3,6 +3,8 @@ import type { Terminal } from "@xterm/xterm";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { useSettings } from "../../settings/SettingsContext";
 import { useTerminalLayout } from "../../layout/TerminalLayoutContext";
+import { registerShortcutAction } from "../../shortcuts/actionRegistry";
+import type { ActionId } from "../../shortcuts/keybindings";
 import { xtermOptions } from "../../themes/xterm";
 import { useTerminal } from "./useTerminal";
 import {
@@ -55,6 +57,15 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     Math.max(FONT_SIZE_MIN, settings.termSize + fontZoom),
   );
 
+  // Keyboard focus switching (Cmd+1/2/3) must land DOM focus on this terminal,
+  // not just change the highlighted slot. Register a per-slot focus handler the
+  // shortcut hook calls after focusSlot().
+  useEffect(() => {
+    if (slot == null) return;
+    const id = `focusTerminalSlot${slot}` as ActionId;
+    return registerShortcutAction(id, () => terminalRef.current?.focus());
+  }, [slot]);
+
   // Initial options reflect the settings at mount time; changes apply live.
   const initialOptions = useMemo(
     () => ({
@@ -84,7 +95,6 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     });
     const resizeSub = terminal.onResize(({ cols, rows }) => {
       const id = sessionIdRef.current;
-      console.debug(`[pty] onResize tab=${tabId} cols=${cols} rows=${rows} session=${id}`);
       if (id != null) void ptyResize(id, cols, rows);
     });
     return () => {
@@ -129,15 +139,15 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
 
   // Auto-title: poll the foreground process while visible; rename when it
   // differs from the current title, reverting to the shell name when idle.
-  // Runnable tabs have a deterministic exe-name title and are skipped — the
-  // poller cannot name a direct-exec process (it IS the session's shell pid).
+  // Runnable tabs use the same poller — their command runs through the shell,
+  // so the foreground process (the command) is a child of the session's shell
+  // pid and the poller names it correctly.
   useEffect(() => {
-    if (tab?.command != null) return;
     titleRef.current = tab?.title;
-  }, [tab?.title, tab?.command]);
+  }, [tab?.title]);
 
   useEffect(() => {
-    if (!visible || tab?.command != null) return;
+    if (!visible) return;
     let cancelled = false;
     const interval = setInterval(() => {
       const id = sessionIdRef.current;
@@ -174,9 +184,10 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     spawningRef.current = true;
 
     // Every tab belongs to a worktree; its shell starts there. Runnable tabs
-    // direct-exec their argv instead. Fit first (when visible) so the PTY is
-    // seeded at the terminal's real size and TUIs never start at the 80x24
-    // default and get resized mid-init; the ResizeObserver keeps it correct.
+    // run their command through the interactive shell instead. Fit first (when
+    // visible) so the PTY is seeded at the terminal's real size and TUIs never
+    // start at the 80x24 default and get resized mid-init; the ResizeObserver
+    // keeps it correct.
     const cwd = tab?.worktree ?? null;
     const command = tab?.command ?? null;
     if (visibleRef.current) {
@@ -188,7 +199,6 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     }
     const cols = Math.max(2, terminalRef.current?.cols ?? 80);
     const rows = Math.max(2, terminalRef.current?.rows ?? 24);
-    console.debug(`[pty] spawn tab=${tabId} visible=${visibleRef.current} cols=${cols} rows=${rows}`, command ? `cmd=${command.join(" ")}` : "shell");
 
     void ptyOpen(cwd, (event) => {
       if (event.event === "output") {
@@ -224,7 +234,6 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
       const term = terminalRef.current;
       if (!term?.element) return; // xterm not opened yet
       fitAddonRef.current?.fit();
-      console.debug(`[pty] fit(visible) tab=${tabId} -> cols=${term.cols} rows=${term.rows}`);
     };
     if (visible) {
       fit();
@@ -238,7 +247,6 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     const observer = new ResizeObserver(() => {
       if (!visibleRef.current) return;
       fitAddonRef.current?.fit();
-      console.debug(`[pty] fit(observer) tab=${tabId} -> cols=${terminalRef.current?.cols} rows=${terminalRef.current?.rows}`);
     });
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -255,7 +263,6 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     void fontsReady.then(() => {
       if (cancelled || !visibleRef.current) return;
       fitAddonRef.current?.fit();
-      console.debug(`[pty] fit(fonts-ready) tab=${tabId} -> cols=${terminalRef.current?.cols} rows=${terminalRef.current?.rows}`);
     });
     return () => {
       cancelled = true;

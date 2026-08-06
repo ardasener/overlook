@@ -9,7 +9,7 @@ export type TerminalEvent =
 export async function ptyOpen(
   cwd: string | null,
   onEvent: (event: TerminalEvent) => void,
-  command?: string[] | null,
+  command?: string | null,
   cols?: number,
   rows?: number,
 ): Promise<number> {
@@ -56,12 +56,4 @@ export function ptyShellName(): Promise<string> {
 /** Kill the shell of a session. */
 export function ptyClose(sessionId: number): Promise<void> {
   return invoke("pty_close", { sessionId });
-}
-
-/**
- * Split a runnable command string into argv on whitespace, dropping empty
- * tokens (plain split — quoted args are intentionally unsupported for now).
- */
-export function splitCommand(command: string): string[] {
-  return command.trim().split(/\s+/).filter((tok) => tok.length > 0);
 }

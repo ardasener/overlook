@@ -17,6 +17,16 @@ export type ActionId =
   | "zoomIn"
   | "zoomOut";
 
+/** Internal (non-configurable) actions used to route focus to a terminal.
+ *  Registered per-slot by each TerminalHost; not shown in settings. */
+export type FocusSlotActionId =
+  | "focusTerminalSlot0"
+  | "focusTerminalSlot1"
+  | "focusTerminalSlot2";
+
+/** Action ids that can appear in the action registry. */
+export type RegistryActionId = ActionId | FocusSlotActionId;
+
 /** A parsed combo: which modifiers must be held, and the main key. */
 export interface Combo {
   /** The platform primary modifier: Cmd on macOS, Ctrl elsewhere. */

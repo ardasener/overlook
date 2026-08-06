@@ -12,7 +12,6 @@ import {
 } from "@ant-design/icons";
 import { useSettings } from "../settings/SettingsContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
-import { splitCommand } from "../modules/terminal/pty";
 import { registerShortcutAction } from "../shortcuts/actionRegistry";
 import { isMacOS } from "../lib/platform";
 import "./TerminalTabBar.css";
@@ -55,7 +54,7 @@ function TerminalTabBar({
     setLauncherOpen(false);
     setLauncherQuery("");
     setLauncherIndex(0);
-    launchRunnable(commands.map((c) => splitCommand(c)));
+    launchRunnable(commands);
   };
 
   const filteredRunnables = settings.runnables.filter((r) =>

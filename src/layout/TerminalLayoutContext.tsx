@@ -17,8 +17,8 @@ export interface TerminalTab {
   fontZoom: number;
   /** Worktree path this tab's sessions run in. */
   worktree: string;
-  /** Direct-exec command argv (runnable tabs); null = shell session. */
-  command: string[] | null;
+  /** Command run through the interactive shell (runnable tabs); null = plain shell. */
+  command: string | null;
 }
 
 /** Session-scoped layout for one worktree: its tabs, splits, and focus. */
@@ -75,9 +75,9 @@ interface TerminalLayoutContextValue {
   /** Activate a worktree, creating a fresh one-tab layout on first visit. */
   setActiveWorktree: (path: string) => void;
   newTab: () => void;
-  /** Launch runnable commands: one tab per argv, first in the focused slot,
+  /** Launch runnable commands: one tab per command, first in the focused slot,
    * the rest parked, all in the active worktree. */
-  launchRunnable: (commands: string[][]) => void;
+  launchRunnable: (commands: string[]) => void;
   closeTab: (tabId: string) => void;
   selectTab: (tabId: string) => void;
   focusSlot: (slot: number) => void;
@@ -108,15 +108,8 @@ function makeId(): string {
 }
 
 /** Build a tab for a worktree; `command` is null for shell sessions. */
-function makeTab(worktree: string, title: string, command: string[] | null): TerminalTab {
+function makeTab(worktree: string, title: string, command: string | null): TerminalTab {
   return { id: makeId(), title, fontZoom: 0, worktree, command };
-}
-
-/** Executable basename of a command's argv (the deterministic tab title). */
-function commandName(argv: string[]): string {
-  const exe = argv[0] ?? "app";
-  const base = exe.split("/").pop() ?? exe;
-  return base.split("\\").pop() ?? base;
 }
 
 export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
@@ -234,12 +227,13 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
   }, [updateActiveLayout, shellName, activeWorktree]);
 
   const launchRunnable = useCallback(
-    (commands: string[][]) => {
+    (commands: string[]) => {
       if (commands.length === 0 || activeWorktree == null) return;
       updateActiveLayout((layout) => {
         const focused = Math.min(layout.focusedSlot, layout.slots.length - 1);
-        // Deterministic titles: the executable basename of each command.
-        const tabs = commands.map((argv) => makeTab(activeWorktree, commandName(argv), argv));
+        // Titles start as the shell name; the auto-title poller renames each
+        // tab to its foreground process (the command is the shell's child).
+        const tabs = commands.map((cmd) => makeTab(activeWorktree, shellName, cmd));
         const slots = [...layout.slots];
         slots[focused] = tabs[0].id; // previous occupant parks
         return {
@@ -250,7 +244,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [updateActiveLayout, activeWorktree],
+    [updateActiveLayout, activeWorktree, shellName],
   );
 
   const closeTab = useCallback(
