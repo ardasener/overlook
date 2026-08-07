@@ -393,11 +393,17 @@ export function getPalette(id: string): Palette {
   return PALETTES.find((p) => p.id === id) ?? PALETTES[0];
 }
 
-/** Convert #rrggbb to an rgba() string with the given alpha. */
+/** Convert #rrggbb to an 8-digit #rrggbbaa hex string with the given alpha
+ *  (0..1). xterm's color parser only understands #hex and rgb: forms, NOT
+ *  rgba() — and the WebGL addon needs the alpha inside the hex so it survives
+ *  its color handling. */
 export function withAlpha(hex: string, alpha: number): string {
   const value = hex.replace("#", "");
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  const r = value.slice(0, 2);
+  const g = value.slice(2, 4);
+  const b = value.slice(4, 6);
+  const a = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#${r}${g}${b}${a}`;
 }

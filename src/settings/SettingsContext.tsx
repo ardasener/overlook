@@ -52,6 +52,30 @@ export interface Settings {
   runnables: Runnable[];
   /** Per-action keyboard shortcuts (primary + optional alternative). */
   keybindings: Record<ActionId, Keybinding>;
+  /** Full-window background image (stored filename + blur/opacity). */
+  background: {
+    image: string | null;
+    blur: number;
+    opacity: number;
+    /** Remap the terminal's default/ANSI-black background to transparent so
+     *  TUIs using the default background let the wallpaper show through. */
+    remapBackground: boolean;
+    /** Strip background color SGR codes from app output (aggressive — also
+     *  removes in-app highlight backgrounds). */
+    stripBackground: boolean;
+  };
+}
+
+export const BACKGROUND_BLUR_MAX = 60;
+export const BACKGROUND_OPACITY_MIN = 0.05;
+export const BACKGROUND_OPACITY_MAX = 1;
+
+export function clampBlur(value: number): number {
+  return Math.min(BACKGROUND_BLUR_MAX, Math.max(0, Math.round(value)));
+}
+
+export function clampOpacity(value: number): number {
+  return Math.min(BACKGROUND_OPACITY_MAX, Math.max(BACKGROUND_OPACITY_MIN, value));
 }
 
 /** Seed runnables for a fresh install. User-editable like any other entry. */
@@ -70,6 +94,7 @@ const DEFAULTS: Settings = {
   termSize: 13,
   runnables: DEFAULT_RUNNABLES,
   keybindings: DEFAULT_KEYBINDINGS,
+  background: { image: null, blur: 20, opacity: 0.5, remapBackground: false, stripBackground: false },
 };
 
 const STORAGE_KEY = "overlook-settings";
@@ -123,6 +148,28 @@ function loadSettings(): Settings {
             )
           : DEFAULT_RUNNABLES,
       keybindings: normalizeKeybindings(parsed.keybindings),
+      background: {
+        image:
+          parsed.background && typeof parsed.background.image === "string"
+            ? parsed.background.image
+            : DEFAULTS.background.image,
+        blur:
+          parsed.background && typeof parsed.background.blur === "number"
+            ? clampBlur(parsed.background.blur)
+            : DEFAULTS.background.blur,
+        opacity:
+          parsed.background && typeof parsed.background.opacity === "number"
+            ? clampOpacity(parsed.background.opacity)
+            : DEFAULTS.background.opacity,
+        remapBackground:
+          parsed.background && typeof parsed.background.remapBackground === "boolean"
+            ? parsed.background.remapBackground
+            : DEFAULTS.background.remapBackground,
+        stripBackground:
+          parsed.background && typeof parsed.background.stripBackground === "boolean"
+            ? parsed.background.stripBackground
+            : DEFAULTS.background.stripBackground,
+      },
     };
   } catch {
     return DEFAULTS;

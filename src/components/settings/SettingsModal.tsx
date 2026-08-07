@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
-import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined, RedoOutlined } from "@ant-design/icons";
-import { Button, Input, InputNumber, Modal, Select, Tabs, Tooltip } from "antd";
+import { CheckOutlined, DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, QuestionCircleOutlined, RedoOutlined } from "@ant-design/icons";
+import { Button, Input, InputNumber, message, Modal, Select, Slider, Switch, Tabs, Tooltip } from "antd";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { PALETTES } from "../../themes/palettes";
 import {
+  BACKGROUND_BLUR_MAX,
+  BACKGROUND_OPACITY_MAX,
+  BACKGROUND_OPACITY_MIN,
   TERM_FONT_OPTIONS,
   TERM_SIZE_MAX,
   TERM_SIZE_MIN,
@@ -153,6 +158,37 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
     cancelRecording();
   };
 
+  // ── Background image ────────────────────────────────────────────────────
+
+  const pickBackground = async () => {
+    const picked = await openDialog({
+      multiple: false,
+      filters: [
+        { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "heic"] },
+      ],
+    });
+    if (typeof picked !== "string") return; // canceled
+    try {
+      // Rust copies the file into the app config dir and returns its full
+      // absolute path; the wallpaper layer serves it via convertFileSrc.
+      const storedPath = await invoke<string>("appearance_set_background", { path: picked });
+      update({
+        background: { ...settings.background, image: storedPath },
+      });
+    } catch (err) {
+      void message.error(String(err));
+    }
+  };
+
+  const clearBackground = async () => {
+    try {
+      await invoke("appearance_clear_background");
+    } catch {
+      /* ignore — file may already be gone */
+    }
+    update({ background: { ...settings.background, image: null } });
+  };
+
   return (
     <Modal
       title="Settings"
@@ -239,6 +275,82 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
                     />
                   </Tooltip>
                 </div>
+
+                <h3 className="settings-section-title">Background image</h3>
+
+                {settings.background.image ? (
+                  <div className="settings-stack">
+                    <Button
+                      icon={<PictureOutlined />}
+                      onClick={() => void pickBackground()}
+                      block
+                    >
+                      Change photo
+                    </Button>
+                    <div className="settings-slider-row">
+                      <span className="settings-label">Blur</span>
+                      <Slider
+                        min={0}
+                        max={BACKGROUND_BLUR_MAX}
+                        value={settings.background.blur}
+                        onChange={(blur) =>
+                          update({ background: { ...settings.background, blur } })
+                        }
+                      />
+                    </div>
+                    <div className="settings-slider-row">
+                      <span className="settings-label">Opacity</span>
+                      <Slider
+                        min={BACKGROUND_OPACITY_MIN}
+                        max={BACKGROUND_OPACITY_MAX}
+                        step={0.05}
+                        value={settings.background.opacity}
+                        onChange={(opacity) =>
+                          update({ background: { ...settings.background, opacity } })
+                        }
+                      />
+                    </div>
+                    <Button danger onClick={() => void clearBackground()}>
+                      Clear background
+                    </Button>
+
+                    <div className="settings-toggle-row">
+                      <span className="settings-label">
+                        Remap background colors
+                        <Tooltip title="Makes the terminal's default background transparent so apps that use the default background let your wallpaper show through. Colored text highlights still work.">
+                          <QuestionCircleOutlined className="settings-info-icon" />
+                        </Tooltip>
+                      </span>
+                      <Switch
+                        checked={settings.background.remapBackground}
+                        onChange={(remapBackground) =>
+                          update({ background: { ...settings.background, remapBackground } })
+                        }
+                      />
+                    </div>
+
+                    <div className="settings-toggle-row">
+                      <span className="settings-label">
+                        Strip background colors
+                        <Tooltip title="Removes background color codes from app output, forcing all backgrounds transparent. More aggressive — may also remove highlighted backgrounds inside apps.">
+                          <QuestionCircleOutlined className="settings-info-icon" />
+                        </Tooltip>
+                      </span>
+                      <Switch
+                        checked={settings.background.stripBackground}
+                        onChange={(stripBackground) =>
+                          update({ background: { ...settings.background, stripBackground } })
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="settings-field">
+                    <Button icon={<PictureOutlined />} onClick={() => void pickBackground()} block>
+                      Upload photo
+                    </Button>
+                  </div>
+                )}
 
                 <h3 className="settings-section-title">Terminal</h3>
 

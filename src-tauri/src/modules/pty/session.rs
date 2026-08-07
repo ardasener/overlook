@@ -270,6 +270,15 @@ pub fn spawn_session(
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
+    // Advertise a capable terminal so CLI apps enable truecolor and (where
+    // supported) transparency instead of falling back to a solid background
+    // color that hides the wallpaper. Matches what other terminal apps set.
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("OVERLOOK_TERMINAL", "1");
+    // rxvt-family convention: foreground index;background. "default" signals
+    // a transparent/default background so TUIs don't paint a solid one.
+    cmd.env("COLORFGBG", "15;default");
     let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     // Dropping the slave closes our copy of the slave end, so the reader sees
     // EOF when the child exits.

@@ -15,15 +15,23 @@ export const TERM_SIZE_MIN = 8;
 export const TERM_SIZE_MAX = 24;
 
 /** Builds the xterm theme from a palette; guarantees the terminal matches the UI. */
-export function xtermTheme(palette: Palette): ITheme {
+export function xtermTheme(
+  palette: Palette,
+  translucent = false,
+  remapBackground = false,
+): ITheme {
   const a = palette.ansi;
+  // When remapping, the default background AND ANSI black become fully
+  // transparent (8-digit hex alpha) so TUIs that paint the default background
+  // let the wallpaper show through; explicit colored backgrounds still render.
+  const transparent = withAlpha(palette.bg, 0);
   return {
-    background: palette.bg,
+    background: translucent && remapBackground ? transparent : translucent ? withAlpha(palette.bg, 0) : palette.bg,
     foreground: palette.text,
     cursor: palette.primary,
     cursorAccent: palette.primaryText,
     selectionBackground: withAlpha(palette.primary, 0.25),
-    black: a.black,
+    black: translucent && remapBackground ? transparent : a.black,
     red: a.red,
     green: a.green,
     yellow: a.yellow,
@@ -47,10 +55,12 @@ export function xtermOptions(
   palette: Palette,
   termFont: TermFontId,
   termSize: number,
+  translucent = false,
+  remapBackground = false,
 ) {
   return {
     fontFamily: TERM_FONT_STACKS[termFont],
     fontSize: termSize,
-    theme: xtermTheme(palette),
+    theme: xtermTheme(palette, translucent, remapBackground),
   };
 }

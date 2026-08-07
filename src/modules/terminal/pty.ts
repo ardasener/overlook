@@ -57,3 +57,24 @@ export function ptyShellName(): Promise<string> {
 export function ptyClose(sessionId: number): Promise<void> {
   return invoke("pty_close", { sessionId });
 }
+
+/**
+ * Remove background color SGR codes from an output chunk so every background
+ * renders transparent (the "strip background colors" option). Preserves
+ * foreground codes and all other bytes. Covers:
+ * - standard backgrounds `\x1b[40m`..`\x1b[47m`, `\x1b[100m`..`\x1b[107m`
+ * - 256-color backgrounds `\x1b[48;5;Nm`
+ * - truecolor backgrounds `\x1b[48;2;r;g;bm`
+ */
+export function stripBackgroundCodes(data: Uint8Array): Uint8Array {
+  const text = new TextDecoder().decode(data);
+  // ESC built via fromCharCode to satisfy no-control-regex (which bans ESC
+  // in regex literals even as \x1b / \u001b).
+  const esc = String.fromCharCode(27);
+  const bgCodes = new RegExp(
+    `${esc}\\[(?:4[0-7]|10[0-7])m|${esc}\\[48;[25];[0-9;]*m`,
+    "g",
+  );
+  const filtered = text.replace(bgCodes, "");
+  return new TextEncoder().encode(filtered);
+}

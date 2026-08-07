@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layout } from "antd";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import WorkspaceSidebar from "./components/WorkspaceSidebar";
 import SettingsModal from "./components/settings/SettingsModal";
 import TerminalTabBar from "./components/TerminalTabBar";
 import SplitLayout from "./components/SplitLayout";
 import { TerminalLayoutProvider, useTerminalLayout } from "./layout/TerminalLayoutContext";
 import { WorkspaceProvider, useWorkspace } from "./workspace/WorkspaceContext";
+import { useSettings } from "./settings/SettingsContext";
 import { useKeyboardShortcuts } from "./shortcuts/useKeyboardShortcuts";
 import { registerShortcutAction } from "./shortcuts/actionRegistry";
 import "./App.css";
@@ -27,7 +29,21 @@ function AppShell() {
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const { projects } = useWorkspace();
   const { activeWorktree, setActiveWorktree } = useTerminalLayout();
+  const { settings } = useSettings();
   useKeyboardShortcuts();
+
+  // Background wallpaper: the stored value is the full absolute path of the
+  // copied file (Rust `appearance_set_background`); serve it via the asset
+  // protocol.
+  const wallpaperUrl = useMemo(() => {
+    if (!settings.background.image) return null;
+    return convertFileSrc(settings.background.image);
+  }, [settings.background.image]);
+
+  // Body class toggles translucent surfaces under the wallpaper.
+  useEffect(() => {
+    document.body.classList.toggle("has-wallpaper", settings.background.image != null);
+  }, [settings.background.image]);
 
   // Stable identity for the sidebar's onReveal (avoids re-registering its
   // focus shortcut on every render).
@@ -50,7 +66,18 @@ function AppShell() {
   }, [projects, activeWorktree, setActiveWorktree]);
 
   return (
-    <Layout className="app-layout">
+    <>
+      {wallpaperUrl && (
+        <div
+          className="app-wallpaper"
+          style={{
+            backgroundImage: `url("${wallpaperUrl}")`,
+            filter: `blur(${settings.background.blur}px)`,
+            opacity: settings.background.opacity,
+          }}
+        />
+      )}
+      <Layout className="app-layout">
       {/* Full-width tab bar on top so the macOS traffic lights sit over it;
           the workspace sidebar lives below it, beside the terminal area. */}
       <TerminalTabBar
@@ -75,7 +102,8 @@ function AppShell() {
         </Content>
       </Layout>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </Layout>
+      </Layout>
+    </>
   );
 }
 

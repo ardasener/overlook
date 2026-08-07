@@ -13,11 +13,13 @@ import {
   ptyOpen,
   ptyResize,
   ptyWrite,
+  stripBackgroundCodes,
 } from "./pty";
 
 const BASE_TERMINAL_OPTIONS = {
   cursorBlink: true,
   scrollback: 10_000,
+  allowTransparency: true,
 };
 
 /** Bounds for the effective (default + zoom) font size. */
@@ -43,6 +45,9 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
   const sessionIdRef = useRef<number | null>(null);
   const spawningRef = useRef(false);
   const terminalRef = useRef<Terminal | null>(null);
+  // Live flag for the strip-background output filter (read by the session
+  // output handler, which is bound once per tab).
+  const stripBackgroundRef = useRef(false);
   const visibleRef = useRef(visible);
   const titleRef = useRef<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +75,13 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
   const initialOptions = useMemo(
     () => ({
       ...BASE_TERMINAL_OPTIONS,
-      ...xtermOptions(palette, settings.termFont, settings.termSize),
+      ...xtermOptions(
+        palette,
+        settings.termFont,
+        settings.termSize,
+        settings.background.image != null,
+        settings.background.remapBackground,
+      ),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -113,6 +124,8 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
       palette,
       settings.termFont,
       settings.termSize,
+      settings.background.image != null,
+      settings.background.remapBackground,
     );
     terminal.options.fontFamily = fontFamily;
     terminal.options.theme = theme;
@@ -123,18 +136,30 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     }
   }, [terminal, settings, palette, effectiveFontSize, fitAddonRef]);
 
+  // Keep the strip-background flag current for the (once-bound) output handler.
+  useEffect(() => {
+    stripBackgroundRef.current =
+      settings.background.image != null && settings.background.stripBackground;
+  }, [settings.background.image, settings.background.stripBackground]);
+
   // Ctrl/Cmd + wheel (or pinch) zooms this pane's font. Native non-passive
-  // listener so preventDefault actually stops webview page zoom.
+  // listener so preventDefault actually stops webview page zoom. Capture
+  // phase is required: TUIs enable mouse reporting, which makes xterm install
+  // its own wheel listener that stopPropagation()s — a bubble-phase listener
+  // here would never fire inside htop/vim/opencode. Capture runs first, so we
+  // intercept modifier-wheel before xterm turns it into a mouse report; plain
+  // wheel (no modifier) passes through untouched.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
+      e.stopPropagation();
       zoomTab(tabId, e.deltaY < 0 ? 1 : -1);
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    el.addEventListener("wheel", onWheel, { capture: true, passive: false });
+    return () => el.removeEventListener("wheel", onWheel, { capture: true });
   }, [containerRef, tabId, zoomTab]);
 
   // Auto-title: poll the foreground process while visible; rename when it
@@ -202,7 +227,13 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
 
     void ptyOpen(cwd, (event) => {
       if (event.event === "output") {
-        terminalRef.current?.write(new Uint8Array(event.data.data));
+        let bytes = new Uint8Array(event.data.data);
+        // Strip background color codes when the option is on (read via ref so
+        // the handler stays live without re-subscribing on settings change).
+        if (stripBackgroundRef.current) {
+          bytes = stripBackgroundCodes(bytes);
+        }
+        terminalRef.current?.write(bytes);
       } else if (event.event === "exit" && command !== null) {
         // Runnable tab: the process ending closes the tab.
         closeTab(tabId);

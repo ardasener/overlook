@@ -25,6 +25,56 @@
   color: var(--ol-text);
 }
 
+/* Vertical stack of full-width controls (background image section). */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ol-scale));
+  padding: calc(6px * var(--ol-scale)) 0;
+}
+
+/* A label + slider pair on its own row; the slider takes the remaining
+   width so it stays draggable (unlike a squeezed flex row). */
+.settings-slider-row {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--ol-scale));
+}
+
+.settings-slider-row .settings-label {
+  width: 64px;
+}
+
+.settings-slider-row .ant-slider {
+  flex: 1;
+  margin: 0;
+}
+
+/* Toggle rows for the TUI background transparency options. */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--ol-scale));
+  padding: calc(4px * var(--ol-scale)) 0;
+}
+
+.settings-toggle-row .settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ol-scale));
+}
+
+.settings-info-icon {
+  color: var(--ol-text-muted);
+  font-size: calc(12px * var(--ol-scale));
+  cursor: help;
+}
+
+.settings-info-icon:hover {
+  color: var(--ol-primary);
+}
+
 /* Theme picker cards */
 .theme-grid {
   display: grid;

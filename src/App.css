@@ -16,8 +16,42 @@ body,
   background: var(--ol-bg);
 }
 
+/* Full-window wallpaper behind the UI; chrome and terminals go translucent
+   under body.has-wallpaper so the blurred image shows through. */
+.app-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
 .app-layout {
+  position: relative;
+  z-index: 1;
   height: 100vh;
+}
+
+/* With a wallpaper, the theme surfaces become translucent so the image shows
+   through chrome, panels, and terminal interiors. */
+body.has-wallpaper html,
+body.has-wallpaper,
+body.has-wallpaper #root {
+  background: transparent;
+}
+
+/* AntD Layout paints an opaque default background; clear it so the fixed
+   wallpaper layer behind it is visible. */
+body.has-wallpaper .app-layout,
+body.has-wallpaper .app-body,
+body.has-wallpaper .app-content {
+  background: transparent;
+}
+
+body.has-wallpaper .slot {
+  background: transparent;
 }
 
 /* Row beneath the full-width tab bar: sidebar + terminal area. */
@@ -204,6 +238,11 @@ body.ol-dragging * {
 .terminal-host {
   position: absolute;
   inset: 0;
+  /* Text over a transparent/translucent background needs grayscale AA —
+     subpixel antialiasing relies on an opaque backdrop and renders badly
+     over the wallpaper. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .terminal-host .terminal {
@@ -221,6 +260,48 @@ body.ol-dragging * {
  */
 .terminal-host .xterm .xterm-viewport {
   background-color: var(--ol-bg);
+}
+
+/* With a wallpaper the terminal interior is translucent: the WebGL canvas and
+   screen layers are transparent (allowTransparency), the scrollable element
+   and slot get a light 20% theme-bg tint, and the viewport — which is the
+   full-area element BEHIND them — must be transparent too, otherwise its
+   opaque background covers the wallpaper. */
+body.has-wallpaper .terminal-host .xterm .xterm-viewport {
+  background-color: transparent;
+}
+
+body.has-wallpaper .terminal-host .xterm .xterm-scrollable-element {
+  background-color: transparent !important;
+}
+
+body.has-wallpaper .slot {
+  background: transparent;
+}
+
+/* With a wallpaper, the workspace sidebar interior becomes translucent so the
+   image shows through the tree and search too. */
+body.has-wallpaper .app-sider {
+  background: transparent !important;
+}
+
+body.has-wallpaper .app-sider .ant-tree {
+  background: transparent;
+}
+
+body.has-wallpaper .app-sider .ant-tree .ant-tree-node-content-wrapper:hover,
+body.has-wallpaper .app-sider .ant-tree .ant-tree-node-selected {
+  background-color: color-mix(in srgb, var(--ol-text) 12%, transparent);
+}
+
+body.has-wallpaper .app-sider .workspace-search .ant-input-affix-wrapper,
+body.has-wallpaper .app-sider .workspace-search.ant-input-affix-wrapper {
+  background: color-mix(in srgb, var(--ol-surface) 55%, transparent);
+}
+
+body.has-wallpaper .app-sider .workspace-search .ant-input,
+body.has-wallpaper .app-sider .workspace-search input {
+  background: transparent;
 }
 
 .terminal-error {

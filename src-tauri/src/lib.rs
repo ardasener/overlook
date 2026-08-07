@@ -1,5 +1,6 @@
 mod modules;
 
+use modules::appearance::{self};
 use modules::pty::{self, PtyManager};
 use modules::workspace::{self};
 
@@ -22,6 +23,8 @@ pub fn run() {
             workspace::workspace_fork,
             workspace::workspace_worktree_is_dirty,
             workspace::workspace_remove_worktree,
+            appearance::appearance_set_background,
+            appearance::appearance_clear_background,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
