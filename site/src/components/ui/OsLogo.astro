@@ -1,0 +1,15 @@
+---
+import "@phosphor-icons/web/regular";
+
+interface Props {
+	name: "apple" | "linux" | "windows";
+	size?: number;
+}
+
+const { name, size = 16 } = Astro.props;
+
+// Phosphor icon classes (regular weight). The `ph` CSS font is imported above.
+const className = `ph ph-${name}-logo`;
+---
+
+<i class={className} style={`font-size:${size}px; display:inline-block; line-height:1;`} aria-hidden="true" />

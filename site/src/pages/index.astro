@@ -1,0 +1,148 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import SectionHeader from "@/components/elements/SectionHeader.astro";
+import Button from "@/components/ui/Button.astro";
+import Badge from "@/components/ui/Badge.astro";
+import OsLogo from "@/components/ui/OsLogo.astro";
+import { siteConfig } from "@/config/site";
+import {
+	ArrowRight,
+	Boxes,
+	FolderGit2,
+	Keyboard,
+	Rocket,
+	Rows3,
+	Shuffle,
+	Terminal,
+} from "@lucide/astro";
+
+const releasesUrl = "https://github.com/ardasener/overlook/releases/latest";
+
+const features = [
+	{
+		icon: FolderGit2,
+		title: "Workspaces & git worktrees",
+		desc: "Organize projects and fork worktrees from the sidebar; every worktree keeps its own terminal layout.",
+	},
+	{
+		icon: Terminal,
+		title: "Terminal-first",
+		desc: "A full xterm-based terminal with splits, per-pane font zoom, runnable apps, and configurable keybindings.",
+	},
+	{
+		icon: Keyboard,
+		title: "Keyboard driven",
+		desc: "Focus panes, switch tabs, toggle splits, and launch apps — all from the keyboard, without leaking into TUIs.",
+	},
+	{
+		icon: Rocket,
+		title: "Runnable apps",
+		desc: "Launch TUI tools like opencode, micro, and btop as one or more tabs, defined and configured by you.",
+	},
+	{
+		icon: Rows3,
+		title: "Split layouts",
+		desc: "Vertical and bottom splits per worktree, with drag-and-drop tab assignment and a cleanup tool for idle sessions.",
+	},
+	{
+		icon: Shuffle,
+		title: "Built to your taste",
+		desc: "Themes, wallpapers with blur and transparency, UI scale, and per-action keybinding overrides.",
+	},
+];
+---
+
+<Layout
+	title={siteConfig.meta.title}
+	description={siteConfig.meta.description}
+	keywords={siteConfig.meta.keywords}
+>
+	<section class="relative z-20 site-container pt-16 md:pt-24 lg:pt-32">
+		<div class="mx-auto max-w-3xl text-center">
+			<div class="mb-6 flex justify-center gap-2">
+				<Badge variant="primary">Tauri + React + xterm</Badge>
+				<Badge variant="accent">Open source</Badge>
+			</div>
+
+			<div class="mb-6 flex justify-center">
+				<img
+					src="/overlook/icon.png"
+					alt="Overlook icon"
+					class="h-20 w-20 rounded-2xl shadow-lg"
+					width={80}
+					height={80}
+				/>
+			</div>
+
+			<h1 class="mb-5 text-4xl leading-tight md:text-5xl lg:text-6xl font-brand">
+				Overlook
+			</h1>
+
+			<p class="mb-8 mx-auto max-w-2xl text-base md:text-lg text-neutral-600 dark:text-neutral-300 leading-relaxed">
+				A lightweight, terminal-first desktop workspace for projects and git
+				worktrees. Keep every worktree's terminals, splits, and apps at your
+				fingertips.
+			</p>
+
+			<div class="flex flex-wrap justify-center gap-3">
+				<Button url={releasesUrl} type="outline" target="_blank" size="lg">
+					<OsLogo name="apple" /> Download for macOS
+				</Button>
+				<Button url={releasesUrl} type="outline" target="_blank" size="lg">
+					<OsLogo name="linux" /> Download for Linux
+				</Button>
+				<Button url={releasesUrl} type="outline" target="_blank" size="lg">
+					<OsLogo name="windows" /> Download for Windows
+				</Button>
+			</div>
+
+			<p class="mt-4 text-xs text-neutral-400">
+				All platforms from the latest GitHub release.
+			</p>
+		</div>
+	</section>
+
+	<section class="site-container py-16 md:py-24">
+		<SectionHeader
+			title="Built for the way you work"
+			description="Terminals that understand your project structure — worktrees, layouts, and apps in one place."
+		/>
+		<div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+			{features.map((item) => (
+				<article
+					class="rounded-xl border border-primary/10 bg-bg-secondary p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_30px_rgba(var(--color-primary-rgb),0.08)] dark:border-neutral-700 dark:bg-bg-secondary-dark"
+				>
+					<div class="mb-4 grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-light">
+						<item.icon class="h-5 w-5" />
+					</div>
+					<h3 class="mb-2 text-lg font-semibold text-neutral-800 dark:text-neutral-100">{item.title}</h3>
+					<p class="text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">{item.desc}</p>
+				</article>
+			))}
+		</div>
+	</section>
+
+	<section class="site-container py-12 md:py-20">
+		<div
+			class="rounded-xl border border-primary/10 bg-bg-secondary p-7 text-center dark:border-neutral-700 dark:bg-bg-secondary-dark md:p-10"
+		>
+			<div class="mb-4 flex justify-center">
+				<div class="grid h-12 w-12 place-items-center rounded-xl bg-accent/30 text-neutral-800 dark:bg-accent/20 dark:text-neutral-100">
+					<Boxes class="h-5 w-5" />
+				</div>
+			</div>
+			<h2 class="mx-auto mb-4 max-w-2xl text-3xl font-brand md:text-4xl">Get started today</h2>
+			<p class="mx-auto mb-7 max-w-2xl text-neutral-600 dark:text-neutral-300">
+				Download the latest release, or explore the source and documentation on GitHub.
+			</p>
+			<div class="flex flex-wrap justify-center gap-3">
+				<Button url={releasesUrl} type="fill" target="_blank">
+					Download Overlook <ArrowRight size={16} />
+				</Button>
+				<Button url={siteConfig.social.github} type="outline" target="_blank">
+					View on GitHub
+				</Button>
+			</div>
+		</div>
+	</section>
+</Layout>
