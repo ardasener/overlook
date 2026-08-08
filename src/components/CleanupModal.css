@@ -1,0 +1,41 @@
+.cleanup-alert {
+  margin-bottom: calc(10px * var(--ol-scale));
+}
+
+.cleanup-toolbar {
+  display: flex;
+  gap: calc(6px * var(--ol-scale));
+  margin-bottom: calc(6px * var(--ol-scale));
+}
+
+.cleanup-tree {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: calc(12px * var(--ol-scale));
+}
+
+.cleanup-project {
+  font-weight: 600;
+  color: var(--ol-text);
+}
+
+.cleanup-worktree {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ol-scale));
+}
+
+.cleanup-worktree-name {
+  color: var(--ol-text-secondary);
+}
+
+.cleanup-worktree-meta {
+  font-size: calc(11px * var(--ol-scale));
+  color: var(--ol-text-muted);
+}
+
+.cleanup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(8px * var(--ol-scale));
+}

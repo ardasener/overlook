@@ -2,6 +2,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent, WheelEvent } from "react
 import { useEffect, useRef, useState } from "react";
 import { Button, Input, Popover, Tag, Tooltip } from "antd";
 import {
+  ClearOutlined,
   ColumnWidthOutlined,
   InsertRowBelowOutlined,
   MenuFoldOutlined,
@@ -18,18 +19,21 @@ import "./TerminalTabBar.css";
 
 interface TerminalTabBarProps {
   onOpenSettings: () => void;
+  onOpenCleanup: () => void;
   workspacesOpen: boolean;
   onToggleWorkspaces: () => void;
 }
 
 /**
  * Tab strip (control-only — content is rendered by the split layout) plus the
- * new-tab, split-toggle, settings and workspace-toggle actions. The container
- * is a macOS drag region: AntD tab items (role="tab") and buttons are
- * clickable and block dragging; empty bar space drags the window.
+ * left action group (workspace toggle, settings, cleanup) and the new-tab,
+ * launcher and split-toggle actions. The container is a macOS drag region:
+ * AntD tab items (role="tab") and buttons are clickable and block dragging;
+ * empty bar space drags the window.
  */
 function TerminalTabBar({
   onOpenSettings,
+  onOpenCleanup,
   workspacesOpen,
   onToggleWorkspaces,
 }: TerminalTabBarProps) {
@@ -126,6 +130,35 @@ function TerminalTabBar({
       data-tauri-drag-region="deep"
       style={isMacOS() ? ({ paddingLeft: 80 } as CSSProperties) : undefined}
     >
+      <div className="tabbar-actions-left" data-tauri-drag-region="deep">
+        <Tooltip title={workspacesOpen ? "Hide workspaces" : "Show workspaces"}>
+          <Button
+            type="text"
+            size="small"
+            icon={workspacesOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+            onClick={onToggleWorkspaces}
+            aria-label="Toggle workspaces"
+          />
+        </Tooltip>
+        <Tooltip title="Settings">
+          <Button
+            type="text"
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={onOpenSettings}
+            aria-label="Settings"
+          />
+        </Tooltip>
+        <Tooltip title="Clean up workspaces">
+          <Button
+            type="text"
+            size="small"
+            icon={<ClearOutlined />}
+            onClick={onOpenCleanup}
+            aria-label="Clean up workspaces"
+          />
+        </Tooltip>
+      </div>
       <div
         ref={stripRef}
         className="tab-strip"
@@ -167,24 +200,6 @@ function TerminalTabBar({
         })}
       </div>
       <div className="tabbar-actions">
-        <Tooltip title={workspacesOpen ? "Hide workspaces" : "Show workspaces"}>
-          <Button
-            type="text"
-            size="small"
-            icon={workspacesOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
-            onClick={onToggleWorkspaces}
-            aria-label="Toggle workspaces"
-          />
-        </Tooltip>
-        <Tooltip title="Settings">
-          <Button
-            type="text"
-            size="small"
-            icon={<SettingOutlined />}
-            onClick={onOpenSettings}
-            aria-label="Settings"
-          />
-        </Tooltip>
         <Tooltip title="New terminal">
           <Button
             type="text"

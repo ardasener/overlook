@@ -238,9 +238,12 @@ body.ol-dragging * {
 .terminal-host {
   position: absolute;
   inset: 0;
-  /* Text over a transparent/translucent background needs grayscale AA —
-     subpixel antialiasing relies on an opaque backdrop and renders badly
-     over the wallpaper. */
+}
+
+/* With a wallpaper the terminal text renders over a transparent/translucent
+   backdrop, where subpixel antialiasing looks bad — force grayscale AA only
+   in that case so the normal (non-wallpaper) look is unchanged. */
+body.has-wallpaper .terminal-host {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

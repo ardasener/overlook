@@ -57,6 +57,15 @@
   flex-shrink: 0;
 }
 
+/* Left action group before the tab strip: workspace toggle, settings,
+   cleanup. macOS reserves traffic-light space via the container padding. */
+.tabbar-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 /* ── Runnable launcher popover ─────────────────────────────── */
 
 .launcher-popover {

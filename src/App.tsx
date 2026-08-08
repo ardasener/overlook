@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layout } from "antd";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import WorkspaceSidebar from "./components/WorkspaceSidebar";
+import CleanupModal from "./components/CleanupModal";
 import SettingsModal from "./components/settings/SettingsModal";
 import TerminalTabBar from "./components/TerminalTabBar";
 import SplitLayout from "./components/SplitLayout";
@@ -26,6 +27,7 @@ function App() {
 
 function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const { projects } = useWorkspace();
   const { activeWorktree, setActiveWorktree } = useTerminalLayout();
@@ -82,6 +84,7 @@ function AppShell() {
           the workspace sidebar lives below it, beside the terminal area. */}
       <TerminalTabBar
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenCleanup={() => setCleanupOpen(true)}
         workspacesOpen={workspacesOpen}
         onToggleWorkspaces={() => setWorkspacesOpen((open) => !open)}
       />
@@ -102,6 +105,7 @@ function AppShell() {
         </Content>
       </Layout>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CleanupModal open={cleanupOpen} onClose={() => setCleanupOpen(false)} />
       </Layout>
     </>
   );

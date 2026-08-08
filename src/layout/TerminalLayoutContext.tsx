@@ -65,6 +65,8 @@ interface TerminalLayoutContextValue {
   state: LayoutState;
   /** Every tab across every worktree (hosts stay mounted). */
   allTabs: TerminalTab[];
+  /** worktree path → number of open terminals there (for the cleanup modal). */
+  worktreeTabCounts: Record<string, number>;
   /** Currently selected worktree path, or null. */
   activeWorktree: string | null;
   /** Resolved default shell name (e.g. "zsh"), the idle tab title. */
@@ -79,6 +81,8 @@ interface TerminalLayoutContextValue {
    * the rest parked, all in the active worktree. */
   launchRunnable: (commands: string[]) => void;
   closeTab: (tabId: string) => void;
+  /** Close every tab of a worktree (bulk cleanup); the worktree stays tracked. */
+  closeWorktreeTabs: (path: string) => void;
   selectTab: (tabId: string) => void;
   focusSlot: (slot: number) => void;
   toggleVertical: () => void;
@@ -140,6 +144,15 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
     () => Object.values(layouts).flatMap((l) => l.tabs),
     [layouts],
   );
+
+  /** worktree path → number of open terminals (for the cleanup modal). */
+  const worktreeTabCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [path, layout] of Object.entries(layouts)) {
+      counts[path] = layout.tabs.length;
+    }
+    return counts;
+  }, [layouts]);
 
   const tabOf = useCallback(
     (tabId: string) => allTabs.find((t) => t.id === tabId),
@@ -263,6 +276,19 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
       });
     },
     [layoutOfTab, updateLayout],
+  );
+
+  /** Close every tab of a worktree (bulk cleanup); the worktree stays tracked. */
+  const closeWorktreeTabs = useCallback(
+    (path: string) => {
+      setLayouts((prev) => {
+        if (!prev[path]) return prev;
+        const next = { ...prev };
+        delete next[path];
+        return next;
+      });
+    },
+    [],
   );
 
   const selectTab = useCallback(
@@ -456,6 +482,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       allTabs,
+      worktreeTabCounts,
       activeWorktree,
       shellName,
       tabOf,
@@ -464,6 +491,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
       newTab,
       launchRunnable,
       closeTab,
+      closeWorktreeTabs,
       selectTab,
       focusSlot,
       toggleVertical,
@@ -480,6 +508,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
     [
       state,
       allTabs,
+      worktreeTabCounts,
       activeWorktree,
       shellName,
       tabOf,
@@ -488,6 +517,7 @@ export function TerminalLayoutProvider({ children }: { children: ReactNode }) {
       newTab,
       launchRunnable,
       closeTab,
+      closeWorktreeTabs,
       selectTab,
       focusSlot,
       toggleVertical,

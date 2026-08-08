@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
