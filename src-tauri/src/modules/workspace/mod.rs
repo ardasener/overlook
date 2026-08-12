@@ -28,7 +28,11 @@ pub struct WorktreeInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
     pub path: String,
+    /// Directory basename; the fallback when no display name is set.
     pub name: String,
+    /// User-assigned display name (overrides `name` in the tree).
+    pub display_name: Option<String>,
+    pub favorite: bool,
     pub is_git: bool,
     /// Branch of the default worktree (git projects only).
     pub branch: Option<String>,
@@ -37,7 +41,8 @@ pub struct ProjectInfo {
 
 /// Build a project's info. Returns None when the directory no longer exists
 /// (stale config entries are silently dropped from the list).
-fn project_info(path: String) -> Option<ProjectInfo> {
+fn project_info(entry: &projects::ProjectEntry) -> Option<ProjectInfo> {
+    let path = entry.path().to_string();
     let dir = PathBuf::from(&path);
     if !dir.is_dir() {
         return None;
@@ -70,6 +75,8 @@ fn project_info(path: String) -> Option<ProjectInfo> {
     Some(ProjectInfo {
         path,
         name,
+        display_name: entry.display_name().map(str::to_string),
+        favorite: entry.favorite(),
         is_git,
         branch,
         worktrees,
@@ -83,7 +90,7 @@ pub fn workspace_list(app: tauri::AppHandle) -> Vec<ProjectInfo> {
         return Vec::new();
     };
     projects::load_projects(&config_dir)
-        .into_iter()
+        .iter()
         .filter_map(project_info)
         .collect()
 }
@@ -93,7 +100,8 @@ pub fn workspace_list(app: tauri::AppHandle) -> Vec<ProjectInfo> {
 pub fn workspace_add_project(app: tauri::AppHandle, path: String) -> Result<ProjectInfo, String> {
     let config_dir = app_config_dir(&app).ok_or("no config directory available")?;
     let canonical = projects::add_project(&config_dir, &path)?;
-    project_info(canonical).ok_or_else(|| "failed to load project".to_string())
+    let entry = projects::ProjectEntry::Path(canonical);
+    project_info(&entry).ok_or_else(|| "failed to load project".to_string())
 }
 
 /// Untrack a project (its managed worktrees are left on disk).
@@ -101,6 +109,28 @@ pub fn workspace_add_project(app: tauri::AppHandle, path: String) -> Result<Proj
 pub fn workspace_remove_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let config_dir = app_config_dir(&app).ok_or("no config directory available")?;
     projects::remove_project(&config_dir, &path)
+}
+
+/// Toggle a project's favorite flag.
+#[tauri::command]
+pub fn workspace_set_project_favorite(
+    app: tauri::AppHandle,
+    path: String,
+    favorite: bool,
+) -> Result<(), String> {
+    let config_dir = app_config_dir(&app).ok_or("no config directory available")?;
+    projects::set_favorite(&config_dir, &path, favorite)
+}
+
+/// Set a project's display name (empty string clears it).
+#[tauri::command]
+pub fn workspace_rename_project(
+    app: tauri::AppHandle,
+    path: String,
+    display_name: String,
+) -> Result<(), String> {
+    let config_dir = app_config_dir(&app).ok_or("no config directory available")?;
+    projects::rename(&config_dir, &path, &display_name)
 }
 
 /// The identifier-based app config directory, shared with the wallpaper store.

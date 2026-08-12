@@ -41,6 +41,12 @@
   color: var(--ol-text) !important;
 }
 
+/* Favorite star sits inline with the name; color comes from inline style
+   (theme accent when favorited, muted otherwise). */
+.project-star .anticon-star {
+  font-size: calc(13px * var(--ol-scale));
+}
+
 .worktree-label {
   flex: 1;
   min-width: 0;

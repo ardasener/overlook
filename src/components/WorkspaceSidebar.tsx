@@ -2,14 +2,32 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
   BranchesOutlined,
-  DeleteOutlined,
+  CopyOutlined,
   DownOutlined,
+  EditOutlined,
   PlusOutlined,
+  StarFilled,
+  StarOutlined,
 } from "@ant-design/icons";
-import { Button, Input, message, Popconfirm, Popover, Tooltip, Tree } from "antd";
+import {
+  Button,
+  Dropdown,
+  Input,
+  MenuProps,
+  message,
+  Modal,
+  Popconfirm,
+  Tooltip,
+  Tree,
+} from "antd";
 import type { TreeDataNode, TreeProps } from "antd";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useWorkspace, type ProjectInfo } from "../workspace/WorkspaceContext";
+import {
+  useWorkspace,
+  projectLabel,
+  truncateName,
+  type ProjectInfo,
+} from "../workspace/WorkspaceContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
 import { registerShortcutAction } from "../shortcuts/actionRegistry";
 import "./WorkspaceSidebar.css";
@@ -23,8 +41,9 @@ interface WorkspaceSidebarProps {
  * Project/worktree tree. Projects are the top level; each contains its default
  * worktree (the directory itself) plus managed git worktrees. Selecting any
  * worktree makes it the active one. The search filters by project path or
- * branch name; `+` adds a project via the native folder picker; the fork
- * button creates worktrees.
+ * branch name; `+` adds a project via the native folder picker. Actions live
+ * in a right-click context menu (fork/rename/copy/remove) plus a star button
+ * for favorites; fork and rename use modals.
  */
 function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
   const {
@@ -33,6 +52,9 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
     setSearch,
     addProject,
     removeProject,
+    setProjectFavorite,
+    renameProject,
+    copyPathToClipboard,
     branchExists,
     forkWorktree,
     worktreeIsDirty,
@@ -40,11 +62,15 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
   } = useWorkspace();
   const { activeWorktree, setActiveWorktree } = useTerminalLayout();
 
-  // Fork popover (one at a time, tracked by project path).
+  // Fork modal (one at a time, tracked by project path).
   const [forkProject, setForkProject] = useState<string | null>(null);
   const [forkBranch, setForkBranch] = useState("");
   const [forkBranchExists, setForkBranchExists] = useState(false);
   const [forkError, setForkError] = useState<string | null>(null);
+
+  // Rename modal (one at a time, tracked by project path).
+  const [renameProjectPath, setRenameProjectPath] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   // Dirty-worktree force-removal prompt (project path + worktree path).
   const [forceWorktree, setForceWorktree] = useState<{
@@ -151,6 +177,92 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
     setForkError(null);
   };
 
+  const openRename = (project: ProjectInfo) => {
+    setRenameProjectPath(project.path);
+    setRenameValue(project.displayName ?? project.name);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (renameProjectPath == null) return;
+    await renameProject(renameProjectPath, renameValue);
+    setRenameProjectPath(null);
+    setRenameValue("");
+  };
+
+  const projectMenu = (project: ProjectInfo): MenuProps => ({
+    items: [
+      ...(project.isGit
+        ? [
+            {
+              key: "fork",
+              icon: <BranchesOutlined />,
+              label: "Fork worktree…",
+              onClick: () => openFork(project.path),
+            },
+          ]
+        : []),
+      {
+        key: "rename",
+        icon: <EditOutlined />,
+        label: "Rename…",
+        onClick: () => openRename(project),
+      },
+      {
+        key: "copy",
+        icon: <CopyOutlined />,
+        label: "Copy path",
+        onClick: () => void copyPathToClipboard(project.path),
+      },
+      { type: "divider" as const },
+      {
+        key: "remove",
+        icon: <span style={{ color: "#f87171" }}>🗑</span>,
+        label: "Remove project",
+        danger: true,
+        onClick: () => confirmRemoveProject(project),
+      },
+    ],
+  });
+
+  const confirmRemoveProject = (project: ProjectInfo) => {
+    Modal.confirm({
+      title: "Remove this project?",
+      content: "Its worktrees remain on disk.",
+      okText: "Remove",
+      okButtonProps: { danger: true },
+      onOk: () => void removeProject(project.path),
+    });
+  };
+
+  const worktreeMenu = (
+    wt: { path: string; isDefault: boolean },
+    project: ProjectInfo,
+  ): MenuProps => {
+    const deleteItems: MenuProps["items"] = wt.isDefault
+      ? []
+      : [
+          { type: "divider" },
+          {
+            key: "delete",
+            icon: <span style={{ color: "#f87171" }}>🗑</span>,
+            label: "Delete worktree",
+            danger: true,
+            onClick: () => void handleDeleteWorktree(project.path, wt.path),
+          },
+        ];
+    return {
+      items: [
+        {
+          key: "copy",
+          icon: <CopyOutlined />,
+          label: "Copy path",
+          onClick: () => void copyPathToClipboard(wt.path),
+        },
+        ...(deleteItems ?? []),
+      ],
+    };
+  };
+
   const worktreeTitle = (
     wt: { path: string; branch: string | null; isDefault: boolean },
     project: ProjectInfo,
@@ -161,30 +273,13 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
         : "default"
       : (wt.branch ?? "worktree");
     return (
-      <span className="project-title">
-        <span className="worktree-label" title={wt.path}>
-          {label}
+      <Dropdown trigger={["contextMenu"]} menu={worktreeMenu(wt, project)}>
+        <span className="project-title">
+          <span className="worktree-label" title={wt.path}>
+            {label}
+          </span>
         </span>
-        {!wt.isDefault && (
-          <Popconfirm
-            title="Delete this worktree?"
-            description="Its branch stays in the repository."
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => void handleDeleteWorktree(project.path, wt.path)}
-            onPopupClick={(e) => e.stopPropagation()}
-          >
-            <Button
-              type="text"
-              size="small"
-              icon={<DeleteOutlined />}
-              className="project-action"
-              onMouseDown={(e) => e.stopPropagation()}
-              aria-label={`Delete worktree ${label}`}
-            />
-          </Popconfirm>
-        )}
-      </span>
+      </Dropdown>
     );
   };
 
@@ -212,89 +307,34 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
     // so raw paths would collide (the project node would swallow its children).
     key: `p:${project.path}`,
     title: (
-      <span className="project-title">
-        <span className="project-name" title={project.path}>
-          {project.name}
-        </span>
-        {project.isGit && (
-          <Popover
-            trigger="click"
-            placement="rightTop"
-            open={forkProject === project.path}
-            onOpenChange={(open) => (open ? openFork(project.path) : setForkProject(null))}
-            content={
-              forkBranchExists ? (
-                <div className="workspace-popover">
-                  <div className="workspace-popover-text">
-                    Branch "{forkBranch}" already exists. Attach the new worktree to it?
-                  </div>
-                  <div className="workspace-popover-actions">
-                    <Button size="small" onClick={() => setForkProject(null)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      size="small"
-                      type="primary"
-                      onClick={() => void doFork(project.path, true)}
-                    >
-                      Continue
-                    </Button>
-                  </div>
-                  {forkError && <div className="workspace-popover-error">{forkError}</div>}
-                </div>
-              ) : (
-                <div className="workspace-popover">
-                  <Input
-                    size="small"
-                    placeholder="branch name"
-                    value={forkBranch}
-                    onChange={(e) => {
-                      setForkBranch(e.target.value);
-                      setForkBranchExists(false);
-                    }}
-                    onPressEnter={() => void handleForkSubmit(project.path)}
-                    autoFocus
-                  />
-                  {forkError && <div className="workspace-popover-error">{forkError}</div>}
-                  <Button
-                    size="small"
-                    type="primary"
-                    block
-                    onClick={() => void handleForkSubmit(project.path)}
-                  >
-                    Fork
-                  </Button>
-                </div>
-              )
-            }
-          >
-            <Button
-              type="text"
-              size="small"
-              icon={<BranchesOutlined />}
-              className="project-action"
-              onMouseDown={(e) => e.stopPropagation()}
-              aria-label={`Fork worktree in ${project.name}`}
-            />
-          </Popover>
-        )}
-        <Popconfirm
-          title="Remove this project?"
-          description="Its worktrees remain on disk."
-          okText="Remove"
-          okButtonProps={{ danger: true }}
-          onConfirm={() => void removeProject(project.path)}
-        >
+      <Dropdown trigger={["contextMenu"]} menu={projectMenu(project)}>
+        <span className="project-title">
+          <span className="project-name" title={project.path}>
+            {truncateName(projectLabel(project))}
+          </span>
           <Button
             type="text"
             size="small"
-            icon={<DeleteOutlined />}
-            className="project-action"
+            className="project-action project-star"
+            icon={project.favorite ? <StarFilled /> : <StarOutlined />}
+            style={
+              project.favorite
+                ? { color: "var(--ol-accent-0)" }
+                : { color: "var(--ol-text-muted)" }
+            }
             onMouseDown={(e) => e.stopPropagation()}
-            aria-label={`Remove ${project.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              void setProjectFavorite(project.path, !project.favorite);
+            }}
+            aria-label={
+              project.favorite
+                ? `Unfavorite ${projectLabel(project)}`
+                : `Favorite ${projectLabel(project)}`
+            }
           />
-        </Popconfirm>
-      </span>
+        </span>
+      </Dropdown>
     ),
     children: project.worktrees.map((wt) => ({
       key: `w:${wt.path}`,
@@ -314,6 +354,75 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
       setActiveWorktree(key.slice(2));
     }
   };
+
+  const forkModal = forkProject != null && (
+    <Modal
+      title={`Fork worktree in ${projectLabel(
+        filtered.find((p) => p.path === forkProject) ?? ({
+          path: forkProject,
+          name: forkProject,
+        } as ProjectInfo),
+      )}`}
+      open
+      onCancel={() => setForkProject(null)}
+      footer={
+        forkBranchExists ? (
+          <div className="workspace-modal-actions">
+            <Button onClick={() => setForkProject(null)}>Cancel</Button>
+            <Button type="primary" onClick={() => void doFork(forkProject, true)}>
+              Continue
+            </Button>
+          </div>
+        ) : (
+          <div className="workspace-modal-actions">
+            <Button onClick={() => setForkProject(null)}>Cancel</Button>
+            <Button
+              type="primary"
+              disabled={!forkBranch.trim()}
+              onClick={() => void handleForkSubmit(forkProject)}
+            >
+              Fork
+            </Button>
+          </div>
+        )
+      }
+    >
+      {forkBranchExists ? (
+        <div className="workspace-popover-text">
+          Branch "{forkBranch}" already exists. Attach the new worktree to it?
+        </div>
+      ) : (
+        <Input
+          placeholder="branch name"
+          value={forkBranch}
+          onChange={(e) => {
+            setForkBranch(e.target.value);
+            setForkBranchExists(false);
+          }}
+          onPressEnter={() => void handleForkSubmit(forkProject)}
+          autoFocus
+        />
+      )}
+      {forkError && <div className="workspace-popover-error">{forkError}</div>}
+    </Modal>
+  );
+
+  const renameModal = renameProjectPath != null && (
+    <Modal
+      title="Rename project"
+      open
+      onCancel={() => setRenameProjectPath(null)}
+      onOk={() => void handleRenameSubmit()}
+    >
+      <Input
+        placeholder="Display name (empty resets to the folder name)"
+        value={renameValue}
+        onChange={(e) => setRenameValue(e.target.value)}
+        onPressEnter={() => void handleRenameSubmit()}
+        autoFocus
+      />
+    </Modal>
+  );
 
   return (
     <>
@@ -355,6 +464,8 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
           onSelect={onSelect}
           blockNode
         />
+      {forkModal}
+      {renameModal}
       <Popconfirm
         title="Force remove this worktree?"
         description="It has uncommitted changes that will be discarded."

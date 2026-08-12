@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Modal, Tree } from "antd";
 import type { TreeDataNode } from "antd";
-import { useWorkspace } from "../workspace/WorkspaceContext";
+import { useWorkspace, projectLabel } from "../workspace/WorkspaceContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
 import "./CleanupModal.css";
 
@@ -46,7 +46,7 @@ function CleanupModal({ open, onClose }: CleanupModalProps) {
       projects.map((project) => ({
         key: `p:${project.path}`,
         selectable: false,
-        title: <span className="cleanup-project">{project.name}</span>,
+        title: <span className="cleanup-project">{projectLabel(project)}</span>,
         children: project.worktrees
           .filter((w) => selectablePaths.has(`w:${w.path}`))
           .map((w) => {
