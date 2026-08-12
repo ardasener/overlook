@@ -2,6 +2,10 @@
 node_modules/
 .pnpm-store/
 
+# Generated assets & tooling
+src/assets/nerd-fonts/
+.fonts-venv/
+
 # Build output
 dist/
 dist-ssr/

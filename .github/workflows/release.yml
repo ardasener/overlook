@@ -52,6 +52,15 @@ jobs:
       - name: install frontend dependencies
         run: bun install
 
+      - name: provision Python venv for font conversion
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=python; else PY=python3; fi
+          if [ ! -x .fonts-venv/$([ "$RUNNER_OS" = "Windows" ] && echo "Scripts/python.exe" || echo "bin/python") ]; then
+            "$PY" -m venv .fonts-venv
+          fi
+          .fonts-venv/$([ "$RUNNER_OS" = "Windows" ] && echo "Scripts/python" || echo "bin/python") -m pip install --quiet fonttools brotli
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
