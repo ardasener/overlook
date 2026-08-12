@@ -28,7 +28,7 @@ Do not add new commands that bypass this boundary. New commands must be register
 
 ```bash
 bun install
-bun tauri dev            # dev app
+bun run tauri:dev        # dev app (isolated dev config, identifier com.overlook.app.dev)
 bun tauri build          # production bundle
 bun check-types          # TypeScript type check
 bun lint                 # ESLint

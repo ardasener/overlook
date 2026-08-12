@@ -11,6 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::Serialize;
+use tauri::Manager;
 
 /// One selectable worktree: the project's default worktree (the directory
 /// itself) or a managed git worktree.
@@ -77,8 +78,11 @@ fn project_info(path: String) -> Option<ProjectInfo> {
 
 /// All tracked projects with their worktrees.
 #[tauri::command]
-pub fn workspace_list() -> Vec<ProjectInfo> {
-    projects::load_projects()
+pub fn workspace_list(app: tauri::AppHandle) -> Vec<ProjectInfo> {
+    let Some(config_dir) = app_config_dir(&app) else {
+        return Vec::new();
+    };
+    projects::load_projects(&config_dir)
         .into_iter()
         .filter_map(project_info)
         .collect()
@@ -86,15 +90,22 @@ pub fn workspace_list() -> Vec<ProjectInfo> {
 
 /// Validate and add a project directory.
 #[tauri::command]
-pub fn workspace_add_project(path: String) -> Result<ProjectInfo, String> {
-    let canonical = projects::add_project(&path)?;
+pub fn workspace_add_project(app: tauri::AppHandle, path: String) -> Result<ProjectInfo, String> {
+    let config_dir = app_config_dir(&app).ok_or("no config directory available")?;
+    let canonical = projects::add_project(&config_dir, &path)?;
     project_info(canonical).ok_or_else(|| "failed to load project".to_string())
 }
 
 /// Untrack a project (its managed worktrees are left on disk).
 #[tauri::command]
-pub fn workspace_remove_project(path: String) -> Result<(), String> {
-    projects::remove_project(&path)
+pub fn workspace_remove_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let config_dir = app_config_dir(&app).ok_or("no config directory available")?;
+    projects::remove_project(&config_dir, &path)
+}
+
+/// The identifier-based app config directory, shared with the wallpaper store.
+fn app_config_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path().app_config_dir().ok()
 }
 
 /// Whether a branch exists in a project's repository.

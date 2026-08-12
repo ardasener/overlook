@@ -3,9 +3,14 @@ import type { Palette } from "./palettes";
 import { withAlpha } from "./palettes";
 
 export const TERM_FONT_STACKS = {
-  "fira-code": "'Fira Code', 'SF Mono', Menlo, Consolas, monospace",
-  "jetbrains-mono": "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "ibm-plex-mono": "'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "fira-code": "'FiraCode Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "jetbrains-mono": "'JetBrainsMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "blex-mono": "'BlexMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "sauce-code-pro": "'SauceCodePro Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "go-mono": "'GoMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "ubuntu-mono": "'UbuntuMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "dejavu-sans-mono": "'DejaVuSansMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
+  "terminess": "'Terminess Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
 } as const;
 
 export type TermFontId = keyof typeof TERM_FONT_STACKS;

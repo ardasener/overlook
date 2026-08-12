@@ -1,38 +1,62 @@
-//! Persistence of the tracked project list in the platform config directory
-//! (`~/.config/overlook/projects.json` or the OS equivalent).
+//! Persistence of the tracked project list in the app's config directory
+//! (`~/Library/Application Support/com.overlook.app/projects.json` or the OS
+//! equivalent). The directory is identifier-based (Tauri's `app_config_dir`),
+//! so dev and installed builds keep separate state.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-/// `{config_dir}/overlook` — the app's config directory.
-pub fn config_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("overlook"))
+/// The projects file lives in the given (identifier-based) config directory.
+fn projects_file(config_dir: &Path) -> PathBuf {
+    config_dir.join("projects.json")
 }
 
-fn projects_file() -> Option<PathBuf> {
-    config_dir().map(|d| d.join("projects.json"))
+/// Legacy pre-identifier location: `{config_dir}/overlook/projects.json`.
+fn legacy_projects_file() -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join("overlook").join("projects.json"))
 }
 
 /// Load the tracked project paths (canonical absolute paths). Missing or
-/// corrupt files degrade to an empty list.
-pub fn load_projects() -> Vec<String> {
-    let Some(file) = projects_file() else {
-        return Vec::new();
-    };
-    let Ok(content) = fs::read_to_string(file) else {
-        return Vec::new();
+/// corrupt files degrade to an empty list. On first load, a legacy projects
+/// file from the pre-identifier location is copied into the new one.
+pub fn load_projects(config_dir: &Path) -> Vec<String> {
+    let file = projects_file(config_dir);
+    let Ok(content) = fs::read_to_string(&file) else {
+        return migrate_legacy(config_dir, &file);
     };
     serde_json::from_str::<Vec<String>>(&content).unwrap_or_default()
 }
 
-fn save_projects(projects: &[String]) -> Result<(), String> {
-    let Some(file) = projects_file() else {
-        return Err("no config directory available".to_string());
+/// One-time migration: if the new identifier-based file is absent and a legacy
+/// `{config_dir}/overlook/projects.json` exists, copy its contents into the
+/// new location. The legacy file is never deleted. Returns the migrated list.
+fn migrate_legacy(config_dir: &Path, file: &Path) -> Vec<String> {
+    migrate_from(config_dir, file, legacy_projects_file().as_deref())
+}
+
+/// Migration core, parameterized over the legacy file so tests can point it at
+/// a temp dir instead of the real `{config_dir}/overlook`.
+fn migrate_from(config_dir: &Path, file: &Path, legacy: Option<&Path>) -> Vec<String> {
+    if file.exists() {
+        return Vec::new();
+    }
+    let Some(legacy) = legacy else {
+        return Vec::new();
     };
-    let dir = file.parent().ok_or("invalid config path")?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let Ok(content) = fs::read_to_string(legacy) else {
+        return Vec::new();
+    };
+    let Ok(projects) = serde_json::from_str::<Vec<String>>(&content) else {
+        return Vec::new();
+    };
+    let _ = save_projects(config_dir, &projects);
+    projects
+}
+
+fn save_projects(config_dir: &Path, projects: &[String]) -> Result<(), String> {
+    fs::create_dir_all(config_dir).map_err(|e| e.to_string())?;
     let content = serde_json::to_string_pretty(projects).map_err(|e| e.to_string())?;
-    fs::write(file, content).map_err(|e| e.to_string())
+    fs::write(projects_file(config_dir), content).map_err(|e| e.to_string())
 }
 
 /// Validate that `path` is a directory and return its canonical form.
@@ -47,22 +71,22 @@ pub fn canonicalize(path: &str) -> Result<String, String> {
 }
 
 /// Add a project (deduplicated), persisting the canonical path.
-pub fn add_project(path: &str) -> Result<String, String> {
+pub fn add_project(config_dir: &Path, path: &str) -> Result<String, String> {
     let canonical = canonicalize(path)?;
-    let mut projects = load_projects();
+    let mut projects = load_projects(config_dir);
     if !projects.contains(&canonical) {
         projects.push(canonical.clone());
-        save_projects(&projects)?;
+        save_projects(config_dir, &projects)?;
     }
     Ok(canonical)
 }
 
 /// Untrack a project. Its managed worktrees are left on disk.
-pub fn remove_project(path: &str) -> Result<(), String> {
+pub fn remove_project(config_dir: &Path, path: &str) -> Result<(), String> {
     let canonical = canonicalize(path)?;
-    let mut projects = load_projects();
+    let mut projects = load_projects(config_dir);
     projects.retain(|p| !same_directory(p, &canonical));
-    save_projects(&projects)
+    save_projects(config_dir, &projects)
 }
 
 /// Whether a stored project path refers to the same directory as the input's
@@ -103,5 +127,36 @@ mod tests {
         let a = canonicalize("/tmp").unwrap_or_else(|_| "/tmp".to_string());
         let b = canonicalize("/").unwrap_or_else(|_| "/".to_string());
         assert!(!same_directory(&a, &b));
+    }
+
+    /// load_projects migrates a legacy file into the new dir exactly once,
+    /// preserving the legacy file, and new data wins afterwards.
+    #[test]
+    fn legacy_file_migrates_once_and_new_wins() {
+        let base = std::env::temp_dir().join(format!("overlook-test-{}", std::process::id()));
+        let legacy_dir = base.join("overlook");
+        let new_dir = base.join("com.overlook.app");
+        fs::create_dir_all(&legacy_dir).unwrap();
+        let legacy = legacy_dir.join("projects.json");
+        fs::write(&legacy, r#"["/tmp/alpha"]"#).unwrap();
+
+        // First load migrates the legacy content into the new location.
+        let new_file = projects_file(&new_dir);
+        assert_eq!(
+            migrate_from(&new_dir, &new_file, Some(&legacy)),
+            vec!["/tmp/alpha"]
+        );
+        assert!(new_file.exists());
+        assert!(legacy.exists(), "legacy file must be preserved");
+
+        // New file takes precedence over legacy from now on.
+        fs::write(&new_file, r#"["/tmp/beta"]"#).unwrap();
+        assert_eq!(
+            migrate_from(&new_dir, &new_file, Some(&legacy)),
+            Vec::<String>::new()
+        );
+        assert_eq!(load_projects(&new_dir), vec!["/tmp/beta"]);
+
+        fs::remove_dir_all(&base).ok();
     }
 }

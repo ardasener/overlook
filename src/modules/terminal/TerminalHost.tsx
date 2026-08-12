@@ -22,6 +22,16 @@ const BASE_TERMINAL_OPTIONS = {
   allowTransparency: true,
 };
 
+/**
+ * Shift+Enter (no other modifiers) is the established "newline" convention in
+ * terminal emulators: it is sent as ESC+CR (`\x1b\r`) so TUIs can distinguish
+ * it from the plain `\r` that submits input (e.g. opencode's `alt+return`
+ * newline binding). xterm 6.0.0 sends `\r` for both, so we intercept here.
+ */
+function isShiftEnter(e: KeyboardEvent): boolean {
+  return e.key === "Enter" && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+}
+
 /** Bounds for the effective (default + zoom) font size. */
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 24;
@@ -107,6 +117,23 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
     const resizeSub = terminal.onResize(({ cols, rows }) => {
       const id = sessionIdRef.current;
       if (id != null) void ptyResize(id, cols, rows);
+    });
+    // Shift+Enter → ESC+CR (`\x1b\r`), the shift-enter newline convention;
+    // returning false stops xterm from emitting the plain `\r` it would
+    // otherwise send. Every other key passes through xterm's default handling.
+    // The handler is removed automatically when the terminal is disposed.
+    // xterm calls this for BOTH keydown and keyup, so only write on keydown —
+    // otherwise one press produces two `\x1b\r` sequences (two newlines).
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (isShiftEnter(event)) {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          const id = sessionIdRef.current;
+          if (id != null) void ptyWrite(id, "\x1b\r");
+        }
+        return false;
+      }
+      return true;
     });
     return () => {
       dataSub.dispose();

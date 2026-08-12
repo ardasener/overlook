@@ -28,9 +28,14 @@ export const UI_FONT_OPTIONS: { id: UiFontId; name: string }[] = [
 export { UI_SCALE_DEFAULT, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_STEP };
 
 export const TERM_FONT_OPTIONS: { id: TermFontId; name: string }[] = [
-  { id: "fira-code", name: "Fira Code" },
-  { id: "jetbrains-mono", name: "JetBrains Mono" },
-  { id: "ibm-plex-mono", name: "IBM Plex Mono" },
+  { id: "fira-code", name: "FiraCode" },
+  { id: "jetbrains-mono", name: "JetBrainsMono" },
+  { id: "blex-mono", name: "BlexMono" },
+  { id: "sauce-code-pro", name: "SauceCodePro" },
+  { id: "go-mono", name: "GoMono" },
+  { id: "ubuntu-mono", name: "UbuntuMono" },
+  { id: "dejavu-sans-mono", name: "DejaVuSansMono" },
+  { id: "terminess", name: "Terminess" },
 ];
 
 export { TERM_SIZE_MIN, TERM_SIZE_MAX };
@@ -113,6 +118,12 @@ export function snapUiScale(value: number): number {
   return normalizeScale(value);
 }
 
+/** Map a stored termFont id to a current one, migrating the old IBM Plex Mono id. */
+function normalizeTermFont(id: unknown): TermFontId {
+  if (id === "ibm-plex-mono") return "blex-mono";
+  return TERM_FONT_OPTIONS.some((o) => o.id === id) ? (id as TermFontId) : DEFAULTS.termFont;
+}
+
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -129,9 +140,7 @@ function loadSettings(): Settings {
         typeof parsed.uiScale === "number" && Number.isFinite(parsed.uiScale)
           ? normalizeScale(parsed.uiScale)
           : DEFAULTS.uiScale,
-      termFont: TERM_FONT_OPTIONS.some((o) => o.id === parsed.termFont)
-        ? parsed.termFont!
-        : DEFAULTS.termFont,
+      termFont: normalizeTermFont(parsed.termFont),
       termSize:
         typeof parsed.termSize === "number" && Number.isFinite(parsed.termSize)
           ? clampSize(parsed.termSize)

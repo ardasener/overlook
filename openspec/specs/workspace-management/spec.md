@@ -28,7 +28,7 @@ The application SHALL let the user add a project directory via the `+` button an
 
 #### Scenario: Projects persist across restarts
 - **WHEN** the application restarts
-- **THEN** the tracked project list SHALL be restored from the platform config directory
+- **THEN** the tracked project list SHALL be restored from the identifier-based config directory (e.g. `~/Library/Application Support/com.overlook.app/projects.json`), migrating the legacy `{config_dir}/overlook/projects.json` file on first load when present
 
 ### Requirement: Live search
 The application SHALL filter the tree as the user types, matching project paths and worktree branch names.

@@ -18,13 +18,23 @@ Design inspiration comes from [Terax](https://github.com/crynta/terax-ai) (termi
 
 ## Quick start
 
-Prerequisites: [Rust](https://rustup.rs), [Node 20+](https://nodejs.org), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
+Prerequisites: [Rust](https://rustup.rs), [Node 20+](https://nodejs.org), [Python 3](https://www.python.org), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
 
 ```bash
-bun install        # install frontend deps
-bun tauri dev      # development (compiles Rust + launches app window)
-bun tauri build    # production bundle
+bun install          # install frontend deps
+bun run tauri:dev    # development (isolated dev config; compiles Rust + launches app window)
+bun tauri build      # production bundle
 ```
+
+Dev and installed builds use separate config (dev identifier `com.overlook.app.dev` via `src-tauri/tauri.dev.conf.json`), so daily development state — tracked projects, wallpaper — never collides with the installed app. `bun tauri dev` (raw) is equivalent but uses the prod identifier.
+
+### Terminal fonts (Nerd Fonts)
+
+The terminal fonts are Nerd Fonts (Mono variants), fetched and converted at build time by `bun run fonts:fetch` (runs automatically before `dev`/`build`).
+
+- **Python 3 is required**: the fetch step creates a gitignored venv (`.fonts-venv/`) and installs `fontTools` + `brotli` into it to convert TTFs to woff2. Nothing is installed system-wide.
+- **Bumping the Nerd Fonts version**: edit `VERSION` and the `sha256` checksums in `scripts/fetch-nerd-fonts.ts`, then run `bun run fonts:fetch --force`. Checksums pin the upstream files — a mismatch fails the build instead of shipping a mutated font.
+- Helpful flags: `--check` fails fast when fonts are missing/stale; `--force` re-downloads and re-converts everything.
 
 ## Checks
 
