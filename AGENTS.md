@@ -32,9 +32,12 @@ bun run tauri:dev        # dev app (isolated dev config, identifier com.overlook
 bun tauri build          # production bundle
 bun check-types          # TypeScript type check
 bun lint                 # ESLint
+bun run test             # frontend headless tests (vitest + @xterm/headless, no DOM)
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
+
+CI (`.github/workflows/ci.yml`, macOS runner) invokes exactly these local commands on push to main + pull requests: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `bun run test`, `bun check-types`, `bun lint`. There is no GUI/WebDriver-based test layer; the Rust PTY tests spawn real shells via `spawn_session`'s path (see `pty_integration` in `src-tauri/src/modules/pty/session.rs`).
 
 ## Conventions
 

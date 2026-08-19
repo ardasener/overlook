@@ -41,9 +41,12 @@ The terminal fonts are Nerd Fonts (Mono variants), fetched and converted at buil
 ```bash
 bun check-types    # TypeScript type check
 bun lint           # ESLint
+bun run test       # frontend headless tests (vitest + @xterm/headless, no DOM)
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
+
+CI (`.github/workflows/ci.yml`) runs all of these on push to main and pull requests. The Rust test suite spawns real shells through `spawn_session`'s actual code path; the frontend suite drives xterm headlessly — no GUI or window server is involved anywhere in the test path.
 
 ## Architecture in one paragraph
 

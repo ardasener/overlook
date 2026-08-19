@@ -6,6 +6,7 @@ import { useTerminalLayout } from "../../layout/TerminalLayoutContext";
 import { registerShortcutAction } from "../../shortcuts/actionRegistry";
 import type { ActionId } from "../../shortcuts/keybindings";
 import { xtermOptions } from "../../themes/xterm";
+import { isShiftEnter } from "./keys";
 import { useTerminal } from "./useTerminal";
 import {
   ptyClose,
@@ -28,9 +29,6 @@ const BASE_TERMINAL_OPTIONS = {
  * it from the plain `\r` that submits input (e.g. opencode's `alt+return`
  * newline binding). xterm 6.0.0 sends `\r` for both, so we intercept here.
  */
-function isShiftEnter(e: KeyboardEvent): boolean {
-  return e.key === "Enter" && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
-}
 
 /** Bounds for the effective (default + zoom) font size. */
 const FONT_SIZE_MIN = 8;

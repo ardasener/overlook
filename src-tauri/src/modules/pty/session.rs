@@ -32,6 +32,28 @@ pub fn resolve_shell() -> String {
     default_shell()
 }
 
+/// The UTF-8 locale to apply to a spawned shell, or `None` when the app's own
+/// environment already has a locale set.
+///
+/// A GUI-launched app (e.g. from launchd on macOS) inherits no `LANG`/`LC_ALL`/
+/// `LC_CTYPE`, so shells spawned without a locale run in the C locale, where
+/// multibyte prompt glyphs get miscounted (zsh's `wcwidth` treats the 3-byte
+/// `↵` as 3 columns) and the RPROMPT cursor-return math is wrong. Only when
+/// the app env has no locale at all do we inject a UTF-8 locale; a user's
+/// shell rc can still override it.
+#[cfg(unix)]
+fn utf8_locale_override() -> Option<&'static str> {
+    const LOCALE_VARS: [&str; 3] = ["LANG", "LC_ALL", "LC_CTYPE"];
+    if LOCALE_VARS
+        .iter()
+        .any(|v| std::env::var_os(v).is_some_and(|val| !val.is_empty()))
+    {
+        None
+    } else {
+        Some("en_US.UTF-8")
+    }
+}
+
 #[cfg(unix)]
 fn is_usable_shell(path: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
@@ -124,6 +146,14 @@ impl Session {
     pub fn resize(&self, size: PtySize) -> Result<(), Box<dyn std::error::Error>> {
         let master = self.master.lock().unwrap();
         Ok(master.resize(size)?)
+    }
+
+    /// The kernel winsize as the shell sees it (TIOCGWINSZ). Used by tests to
+    /// verify that a requested resize actually propagated to the PTY.
+    #[allow(dead_code)] // exercised by pty_integration::resize_propagates_to_kernel_winsize
+    pub fn kernel_size(&self) -> Result<PtySize, Box<dyn std::error::Error>> {
+        let master = self.master.lock().unwrap();
+        Ok(master.get_size()?)
     }
 
     /// Kill the child shell.
@@ -279,6 +309,13 @@ pub fn spawn_session(
     // rxvt-family convention: foreground index;background. "default" signals
     // a transparent/default background so TUIs don't paint a solid one.
     cmd.env("COLORFGBG", "15;default");
+    // GUI-launched apps inherit no locale (macOS launchd); without one, the
+    // shell runs in the C locale and miscounts multibyte prompt glyph widths,
+    // breaking RPROMPT cursor-return math. Inject UTF-8 only when absent.
+    #[cfg(unix)]
+    if let Some(locale) = utf8_locale_override() {
+        cmd.env("LANG", locale);
+    }
     let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     // Dropping the slave closes our copy of the slave end, so the reader sees
     // EOF when the child exits.
@@ -389,6 +426,46 @@ mod tests {
         match original {
             Some(value) => std::env::set_var("SHELL", value),
             None => std::env::remove_var("SHELL"),
+        }
+    }
+
+    /// The UTF-8 locale override must apply only when the environment has no
+    /// locale set; any of LANG/LC_ALL/LC_CTYPE suppresses it. Env mutation is
+    /// global, so all scenarios live in one test to avoid parallel-test races.
+    #[cfg(unix)]
+    #[test]
+    fn utf8_locale_override_only_when_no_locale_set() {
+        let originals: [(String, Option<std::ffi::OsString>); 3] = [
+            ("LANG".to_string(), std::env::var_os("LANG")),
+            ("LC_ALL".to_string(), std::env::var_os("LC_ALL")),
+            ("LC_CTYPE".to_string(), std::env::var_os("LC_CTYPE")),
+        ];
+
+        // No locale at all → override applies.
+        for (name, _) in &originals {
+            std::env::remove_var(name);
+        }
+        assert_eq!(utf8_locale_override(), Some("en_US.UTF-8"));
+
+        // Any single locale var set → override suppressed.
+        std::env::set_var("LANG", "fr_FR.UTF-8");
+        assert_eq!(utf8_locale_override(), None);
+        std::env::remove_var("LANG");
+
+        std::env::set_var("LC_ALL", "de_DE.UTF-8");
+        assert_eq!(utf8_locale_override(), None);
+        std::env::remove_var("LC_ALL");
+
+        std::env::set_var("LC_CTYPE", "ja_JP.UTF-8");
+        assert_eq!(utf8_locale_override(), None);
+        std::env::remove_var("LC_CTYPE");
+
+        // Restore originals.
+        for (name, value) in &originals {
+            match value {
+                Some(v) => std::env::set_var(name, v),
+                None => std::env::remove_var(name),
+            }
         }
     }
 
@@ -634,5 +711,246 @@ mod tests {
         assert_eq!(parse_ps_output(ps, 100).as_deref(), Some("ls"));
         assert_eq!(parse_ps_output("", 100), None);
         assert_eq!(parse_ps_output("  onlyone  1  field\n", 100), None);
+    }
+}
+
+#[cfg(test)]
+mod pty_integration {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+    use tauri::ipc::InvokeResponseBody;
+
+    /// Spawn a shell through `spawn_session`'s real path (env + PTY + reader
+    /// thread + channel) and return the raw output bytes it produced up to a
+    /// deadline. Mirrors the app exactly: same env construction, same command
+    /// resolution, same reader loop.
+    fn spawn_session_capture(
+        id: u32,
+        command: Option<String>,
+        rows: u16,
+        cols: u16,
+        cwd: Option<&str>,
+        duration: Duration,
+    ) -> Vec<u8> {
+        let manager = PtyManager::default();
+        let (tx, rx) = mpsc::channel::<TerminalEvent>();
+        let channel = Channel::new(move |body| {
+            let json = match &body {
+                InvokeResponseBody::Json(s) => s.clone(),
+                InvokeResponseBody::Raw(v) => String::from_utf8_lossy(v).into_owned(),
+            };
+            let event: TerminalEvent = serde_json::from_str(&json).expect("valid event json");
+            let _ = tx.send(event);
+            Ok(())
+        });
+
+        let size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let session = spawn_session(id, cwd.map(str::to_string), size, channel, manager.clone(), command)
+            .expect("session spawns");
+
+        // Drain output until the deadline (or session exit, for command runs).
+        // A single recv timeout is NOT the end of data (the shell can pause
+        // mid-startup), so keep draining until the deadline.
+        let deadline = Instant::now() + duration;
+        let mut out = Vec::new();
+        loop {
+            if Instant::now() >= deadline {
+                break;
+            }
+            match rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(TerminalEvent::Output { data, .. }) => out.extend_from_slice(&data),
+                Ok(TerminalEvent::Exit { .. }) => break,
+                Err(_) => continue,
+            }
+        }
+        session.kill();
+        manager.remove(id);
+        out
+    }
+
+    /// Extract the RPROMPT cursor math (`ESC[<n>C ... ESC[<m>D`) from the tail
+    /// of a prompt redraw. The RPROMPT forward-move and its return back-move
+    /// are the LAST `ESC[<digits>C` and `ESC[<digits>D` in the region, so we
+    /// take the final occurrence of each. Intermediate SGR codes (`\x1b[1m`,
+    /// `\x1b[31m`) between them must not confuse the scan.
+    fn extract_rprompt_cursor_math(bytes: &[u8]) -> Option<(u32, u32)> {
+        let text = String::from_utf8_lossy(bytes);
+        let mut forward: Option<u32> = None;
+        let mut back: Option<u32> = None;
+        let mut rest = text.as_ref();
+        while let Some(esc) = rest.find("\u{1b}[") {
+            let after = &rest[esc + 2..];
+            let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let final_char = after.chars().nth(digits.len());
+            match (final_char, digits.parse::<u32>().ok()) {
+                (Some('C'), Some(n)) => forward = Some(n),
+                (Some('D'), Some(n)) => back = Some(n),
+                _ => {}
+            }
+            rest = after;
+        }
+        match (forward, back) {
+            (Some(fwd), Some(back)) => Some((fwd, back)),
+            _ => None,
+        }
+    }
+
+    /// Direct write-through: a shell spawned via `spawn_session` with no
+    /// inherited locale runs a failing command; the RPROMPT cursor math must
+    /// be locale-correct — the rendered glyph width, not the C-locale byte
+    /// count. Deterministic: we force zsh, point ZDOTDIR at a temp dir with a
+    /// known `PROMPT`/`RPROMPT` (so no dev-machine .zshrc is involved), and
+    /// run a command that exits 127.
+    #[cfg(unix)]
+    #[test]
+    fn rprompt_math_is_correct_under_app_environment() {
+        // Force zsh so the test is deterministic regardless of $SHELL.
+        let shell_original = std::env::var("SHELL").ok();
+        std::env::set_var("SHELL", "/bin/zsh");
+
+        // Controlled prompt config: no dependency on the machine's .zshrc.
+        let zdotdir = std::env::temp_dir().join(format!("ol-test-zdotdir-{}", std::process::id()));
+        std::fs::create_dir_all(&zdotdir).expect("create ZDOTDIR");
+        let zshrc_path = zdotdir.join(".zshrc");
+        std::fs::write(&zshrc_path, "PROMPT='\u{2570}\u{2500}$ '\nRPROMPT='%(?..%? \u{21b5})'\n")
+            .expect("write .zshrc");
+        let zdotdir_original = std::env::var("ZDOTDIR").ok();
+        std::env::set_var("ZDOTDIR", &zdotdir);
+
+        // Reproduce the GUI-launch condition: no locale in the env.
+        let locale_originals: [(String, Option<std::ffi::OsString>); 3] = [
+            ("LANG".to_string(), std::env::var_os("LANG")),
+            ("LC_ALL".to_string(), std::env::var_os("LC_ALL")),
+            ("LC_CTYPE".to_string(), std::env::var_os("LC_CTYPE")),
+        ];
+        for (name, _) in &locale_originals {
+            std::env::remove_var(name);
+        }
+
+        let manager = PtyManager::default();
+        let (tx, rx) = mpsc::channel::<TerminalEvent>();
+        let channel = Channel::new(move |body| {
+            let json = match &body {
+                InvokeResponseBody::Json(s) => s.clone(),
+                InvokeResponseBody::Raw(v) => String::from_utf8_lossy(v).into_owned(),
+            };
+            let event: TerminalEvent = serde_json::from_str(&json).expect("valid event json");
+            let _ = tx.send(event);
+            Ok(())
+        });
+        let size = PtySize { rows: 39, cols: 75, pixel_width: 0, pixel_height: 0 };
+        let session = spawn_session(102, None, size, channel, manager.clone(), None).expect("spawn");
+        // Let the shell print its prompt.
+        std::thread::sleep(Duration::from_millis(1500));
+        // A failing command: `sh -c 'exit 127'` → RPROMPT renders "127 ↵".
+        session.write(b"sh -c 'exit 127'\n").unwrap();
+        std::thread::sleep(Duration::from_millis(800));
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut out = Vec::new();
+        loop {
+            if Instant::now() >= deadline {
+                break;
+            }
+            match rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(TerminalEvent::Output { data, .. }) => out.extend_from_slice(&data),
+                Ok(TerminalEvent::Exit { .. }) => break,
+                Err(_) => continue,
+            }
+        }
+        session.kill();
+        manager.remove(102);
+
+        // Restore env.
+        for (name, value) in &locale_originals {
+            match value {
+                Some(v) => std::env::set_var(name, v),
+                None => std::env::remove_var(name),
+            }
+        }
+        match zdotdir_original {
+            Some(v) => std::env::set_var("ZDOTDIR", v),
+            None => std::env::remove_var("ZDOTDIR"),
+        }
+        match shell_original {
+            Some(v) => std::env::set_var("SHELL", v),
+            None => std::env::remove_var("SHELL"),
+        }
+        let _ = std::fs::remove_dir_all(&zdotdir);
+
+        // The RPROMPT forward/back math: "127 ↵" is 5 glyphs wide. In the C
+        // locale (no fix) zsh counts the 3-byte ↵ as 3 columns → width 7.
+        let text = String::from_utf8_lossy(&out);
+        let prompt = text.rfind("\u{2570}\u{2500}").map(|i| &text[i..]).unwrap_or("");
+        let (fwd, back) = extract_rprompt_cursor_math(prompt.as_bytes())
+            .expect("RPROMPT cursor-forward/back pair must be present");
+        let width = back.saturating_sub(fwd);
+        assert_eq!(
+            width, 5,
+            "RPROMPT '127 ↵' must be 5 wide under the app env (locale fix); got fwd={fwd} back={back} width={width}. Bytes: {prompt:?}"
+        );
+    }
+
+    /// Multi-byte UTF-8 output must survive the bridge byte-for-byte (no
+    /// replacement characters, no split sequences).
+    #[test]
+    fn multibyte_output_survives_bridge() {
+        // `print -r --` emits its arguments literally (no escape expansion),
+        // so these exact UTF-8 bytes must arrive intact through the bridge.
+        let out = spawn_session_capture(
+            103,
+            Some("print -r -- '\u{2570}\u{2500}\u{0024}\u{0020}\u{21b5}'".to_string()),
+            24,
+            80,
+            None,
+            Duration::from_secs(5),
+        );
+        // zsh -i -c echoes the command with a prompt, then prints the output.
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains('\u{2570}'), "expected ╰ in output, got: {text:?}");
+        assert!(text.contains('\u{21b5}'), "expected ↵ in output, got: {text:?}");
+        assert!(
+            !text.contains('\u{FFFD}'),
+            "replacement char found — bytes corrupted: {text:?}"
+        );
+    }
+
+    /// A requested resize must be reflected in the kernel winsize the shell
+    /// sees (TIOCGWINSZ), not just tracked in our own bookkeeping.
+    #[test]
+    fn resize_propagates_to_kernel_winsize() {
+        let manager = PtyManager::default();
+        let (tx, rx) = mpsc::channel::<TerminalEvent>();
+        let channel = Channel::new(move |body| {
+            let json = match &body {
+                InvokeResponseBody::Json(s) => s.clone(),
+                InvokeResponseBody::Raw(v) => String::from_utf8_lossy(v).into_owned(),
+            };
+            let event: TerminalEvent = serde_json::from_str(&json).expect("valid event json");
+            let _ = tx.send(event);
+            Ok(())
+        });
+        let initial = PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 };
+        let session = spawn_session(104, None, initial, channel, manager.clone(), None).expect("spawn");
+        let _ = rx; // reader thread keeps running; we only need session.resize
+
+        // Drain anything the shell printed so far (non-blocking).
+        std::thread::sleep(Duration::from_millis(300));
+
+        let resized = PtySize { rows: 39, cols: 132, pixel_width: 0, pixel_height: 0 };
+        session.resize(resized).expect("resize succeeds");
+
+        let got = session.kernel_size().expect("kernel size readable");
+        assert_eq!(got.rows, 39, "kernel rows must match the resize");
+        assert_eq!(got.cols, 132, "kernel cols must match the resize");
+
+        session.kill();
+        manager.remove(104);
     }
 }
