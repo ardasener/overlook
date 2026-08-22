@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Offers a one-click sweep that closes leftover sessions and cleans managed worktree state.
+
+## Requirements
 
 ### Requirement: Cleanup action in the tab bar
 The tab bar SHALL include a left action group before the tab strip on all platforms, containing (in order) the workspace toggle, settings, and a cleanup button. On macOS, space SHALL additionally be reserved before the group for the window traffic lights. The cleanup button SHALL open the workspace cleanup modal.

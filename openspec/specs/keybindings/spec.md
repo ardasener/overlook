@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Gives every app action a user-configurable keyboard shortcut (primary + alternative), protected from capture by focused terminals.
+
+## Requirements
 
 ### Requirement: Keyboard shortcuts for all actions
 The application SHALL support keyboard shortcuts for: focusing each panel slot and the workspace sidebar, moving between tabs, toggling the vertical and bottom splits, toggling the workspace sidebar, opening a new terminal, opening the runnable launcher, closing the active tab, and zooming the terminal font in/out.

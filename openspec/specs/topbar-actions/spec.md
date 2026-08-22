@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Provides the tab bar's action buttons — splits, launcher, cleanup, settings — as compact icon controls.
+
+## Requirements
 
 ### Requirement: Top bar hosts settings and workspace controls
 The application SHALL group the settings action and the workspace-panel toggle with the existing new-terminal and split-toggle buttons on the right side of the tab bar, above the workspace panel.

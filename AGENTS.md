@@ -37,7 +37,7 @@ cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
 
-CI (`.github/workflows/ci.yml`, macOS runner) invokes exactly these local commands on push to main + pull requests: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `bun run test`, `bun check-types`, `bun lint`. There is no GUI/WebDriver-based test layer; the Rust PTY tests spawn real shells via `spawn_session`'s path (see `pty_integration` in `src-tauri/src/modules/pty/session.rs`).
+CI (`.github/workflows/ci.yml`) runs an ubuntu + macOS matrix on push to main + pull requests — both run the full suite (Windows is deferred: the shell-dependent PTY tests are `#[cfg(unix)]` and the `ps`-poller helpers aren't cleanly cross-platform yet). The commands invoked are exactly the local ones: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `bun run test`, `bun check-types`, `bun lint`. There is no GUI/WebDriver-based test layer; the Rust PTY tests spawn real shells via `spawn_session`'s path (see `pty_integration` in `src-tauri/src/modules/pty/session.rs`).
 
 ## Conventions
 

@@ -9,8 +9,10 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use tauri::ipc::Channel;
@@ -200,6 +202,9 @@ fn is_shell_comm(comm: &str) -> bool {
 /// `zsh -c "<cmd>"`, the shell `exec`s the command and `shell_pid` IS the
 /// command (e.g. `btop`), with no children — so the command name comes from
 /// the pid itself rather than a child walk.
+// Production caller (the title poller) is Unix-only; the pure parser keeps
+// compiling on all targets so its unit tests do too.
+#[cfg_attr(not(unix), allow(dead_code))]
 pub fn parse_ps_output(ps_lines: &str, shell_pid: u32) -> Option<String> {
     let mut children: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
     let mut own_comm: Option<String> = None;
@@ -340,8 +345,10 @@ pub fn spawn_session(
         exited: exited.clone(),
     });
 
-    // Reader: pump PTY output to the frontend.
+    // Reader: pump PTY output to the frontend. Signals `reader_done` when the
+    // master hits EOF so the waiter can sequence Exit after the last byte.
     let reader_tx = on_event.clone();
+    let (reader_done_tx, reader_done_rx) = mpsc::channel::<()>();
     thread::Builder::new()
         .name(format!("pty-reader-{id}"))
         .spawn(move || {
@@ -363,6 +370,7 @@ pub fn spawn_session(
                     Err(_) => break,
                 }
             }
+            let _ = reader_done_tx.send(());
         })
         .map_err(|e| e.to_string())?;
 
@@ -375,6 +383,12 @@ pub fn spawn_session(
                 Ok(status) => status.exit_code(),
                 Err(_) => 1,
             };
+            // Sequence Exit after the reader drained the master: otherwise
+            // trailing output can be delivered after Exit (or lost entirely
+            // when removal tears the master down mid-read). Bounded wait —
+            // if some orphaned descendant keeps the slave open, announce the
+            // exit anyway rather than hanging the session forever.
+            let _ = reader_done_rx.recv_timeout(Duration::from_secs(2));
             exited.store(true, Ordering::Release);
             let _ = waiter_tx.send(TerminalEvent::Exit { session_id: id, code });
             manager.remove(id);
@@ -631,7 +645,9 @@ mod tests {
                     }
                 }
                 Ok(TerminalEvent::Exit { .. }) => break,
-                Err(_) => break,
+                // A quiet PTY interval is not a failed command; keep waiting
+                // until the overall deadline.
+                Err(_) => continue,
             }
         }
         assert!(saw_output, "command output never arrived through the channel");
@@ -756,16 +772,25 @@ mod pty_integration {
 
         // Drain output until the deadline (or session exit, for command runs).
         // A single recv timeout is NOT the end of data (the shell can pause
-        // mid-startup), so keep draining until the deadline.
+        // mid-startup), so keep draining until the deadline. Exit does not
+        // end the drain either: keep going until a short quiet period has
+        // elapsed after it, so stragglers between the last Output and Exit
+        // can never truncate what we assert on.
         let deadline = Instant::now() + duration;
+        let mut exit_seen: Option<Instant> = None;
         let mut out = Vec::new();
         loop {
             if Instant::now() >= deadline {
                 break;
             }
+            if exit_seen.is_some_and(|at| at.elapsed() >= Duration::from_millis(750)) {
+                break;
+            }
             match rx.recv_timeout(Duration::from_millis(250)) {
                 Ok(TerminalEvent::Output { data, .. }) => out.extend_from_slice(&data),
-                Ok(TerminalEvent::Exit { .. }) => break,
+                Ok(TerminalEvent::Exit { .. }) => {
+                    exit_seen.get_or_insert_with(Instant::now);
+                }
                 Err(_) => continue,
             }
         }
@@ -779,6 +804,7 @@ mod pty_integration {
     /// are the LAST `ESC[<digits>C` and `ESC[<digits>D` in the region, so we
     /// take the final occurrence of each. Intermediate SGR codes (`\x1b[1m`,
     /// `\x1b[31m`) between them must not confuse the scan.
+    #[cfg(unix)]
     fn extract_rprompt_cursor_math(bytes: &[u8]) -> Option<(u32, u32)> {
         let text = String::from_utf8_lossy(bytes);
         let mut forward: Option<u32> = None;
@@ -901,17 +927,19 @@ mod pty_integration {
     /// replacement characters, no split sequences).
     #[test]
     fn multibyte_output_survives_bridge() {
-        // `print -r --` emits its arguments literally (no escape expansion),
-        // so these exact UTF-8 bytes must arrive intact through the bridge.
+        // POSIX printf keeps this test independent of the runner's default
+        // shell; these exact UTF-8 bytes must arrive intact through the bridge.
         let out = spawn_session_capture(
             103,
-            Some("print -r -- '\u{2570}\u{2500}\u{0024}\u{0020}\u{21b5}'".to_string()),
+            Some("printf '%s\\n' '╰─$ ↵'".to_string()),
             24,
             80,
             None,
             Duration::from_secs(5),
         );
-        // zsh -i -c echoes the command with a prompt, then prints the output.
+
+        // The interactive shell echoes the command with a prompt, then prints
+        // the output.
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains('\u{2570}'), "expected ╰ in output, got: {text:?}");
         assert!(text.contains('\u{21b5}'), "expected ↵ in output, got: {text:?}");

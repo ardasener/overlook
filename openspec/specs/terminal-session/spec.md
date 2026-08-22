@@ -1,7 +1,11 @@
-## ADDED Requirements
+## Purpose
+
+Owns the lifecycle of the shell behind each terminal tab: spawning through the Rust PTY bridge, byte-level output/input transport, resize propagation, foreground-process tracking, and exit reporting.
+
+## Requirements
 
 ### Requirement: Shell PTY spawn on app launch
-The system SHALL spawn the user's default shell in a pseudo-terminal when the application starts, and display the running shell in the terminal pane.
+The system SHALL spawn the user's default shell in a pseudo-terminal when the application starts, and display the running shell in the terminal pane. The spawned shell SHALL be given a UTF-8 locale when the inherited environment does not provide one.
 
 #### Scenario: Default shell is spawned
 - **WHEN** the application window opens
@@ -18,6 +22,14 @@ The system SHALL spawn the user's default shell in a pseudo-terminal when the ap
 #### Scenario: Shell is interactive
 - **WHEN** the shell is spawned
 - **THEN** it SHALL be attached to a real PTY (not a pipe), so interactive programs and TUIs work correctly
+
+#### Scenario: Shell is spawned with a UTF-8 locale
+- **WHEN** the application is launched from an environment without a locale set (e.g. the macOS GUI/launchd environment)
+- **THEN** `spawn_session` SHALL set a UTF-8 locale (`LANG` and/or `LC_ALL`) on the child shell so that shell prompt-width accounting (`wcwidth`) matches xterm's rendering
+
+#### Scenario: Existing locale is preserved
+- **WHEN** the application is launched from an environment that already has a UTF-8 locale set
+- **THEN** `spawn_session` SHALL NOT override it
 
 ### Requirement: Shell output renders in the terminal
 The system SHALL stream shell output from the PTY to the xterm.js instance, rendering it as text in the terminal pane.

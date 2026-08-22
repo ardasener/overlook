@@ -28,6 +28,10 @@ bun tauri build      # production bundle
 
 Dev and installed builds use separate config (dev identifier `com.overlook.app.dev` via `src-tauri/tauri.dev.conf.json`), so daily development state — tracked projects, wallpaper — never collides with the installed app. `bun tauri dev` (raw) is equivalent but uses the prod identifier.
 
+### Known Linux graphics issue
+
+On some NVIDIA + KDE/Wayland systems, WebKitGTK can deliver terminal frames inconsistently under continuous terminal redraws. This can make typed characters appear late even when the machine is otherwise responsive. Enabling dynamic/hybrid graphics in firmware, so the integrated GPU handles display composition, may avoid the issue. The problem is renderer-independent and currently remains an upstream WebKitGTK/compositor limitation under investigation.
+
 ### Terminal fonts (Nerd Fonts)
 
 The terminal fonts are Nerd Fonts (Mono variants), fetched and converted at build time by `bun run fonts:fetch` (runs automatically before `dev`/`build`).

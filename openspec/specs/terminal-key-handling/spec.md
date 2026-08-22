@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Routes special key sequences (Shift+Enter newline, modifier combos) from xterm to the shell without breaking TUI keys.
+
+## Requirements
 
 ### Requirement: Shift+Enter inserts a newline
 The terminal SHALL treat Shift+Enter differently from Enter: Enter continues to send the standard carriage return, while Shift+Enter SHALL write the sequence `\x1b\r` (ESC followed by CR) to the PTY so applications that honor the convention (e.g. opencode's `alt+return` newline binding) insert a newline instead of submitting.

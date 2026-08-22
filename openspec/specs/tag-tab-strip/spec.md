@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Renders each session as a closable tag in the tab strip, with active-state and overflow scrolling.
+
+## Requirements
 
 ### Requirement: Tag-based tab strip
 The tab bar SHALL render tabs as a horizontal row of AntD `Tag` pills instead of AntD `Tabs`. Each tag SHALL show the tab title, a close button, and the slot accent color of the tab's panel (bold-tinted when the tab is focused, muted otherwise).

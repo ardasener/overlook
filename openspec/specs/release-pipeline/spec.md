@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Covers licensing and the tag-triggered pipeline that turns `v*` tags into signed release artifacts.
+
+## Requirements
 
 ### Requirement: MIT license
 The repository SHALL include an MIT license file at its root so the project is legally distributable.

@@ -1,4 +1,9 @@
-## ADDED Requirements
+# terminal-testing Specification
+
+## Purpose
+Defines the automated test layers guarding the two-process terminal boundary — the Rust PTY bridge and the frontend xterm glue — and the CI contract that keeps them running on every push.
+
+## Requirements
 
 ### Requirement: Rust PTY bridge integration tests
 The system SHALL provide automated integration tests that spawn real shells through `spawn_session`'s actual code path and assert on the raw PTY output bytes.

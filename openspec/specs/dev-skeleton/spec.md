@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Provides the minimal runnable Tauri + React scaffold the rest of the project is built on, with type checking from day one.
+
+## Requirements
 
 ### Requirement: Tauri and React boilerplate builds
 The project SHALL provide a Tauri 2 + React 19 + TypeScript + Vite skeleton managed with pnpm, with Ant Design 6 wired into the app shell, such that `pnpm tauri dev` compiles and launches the application window.

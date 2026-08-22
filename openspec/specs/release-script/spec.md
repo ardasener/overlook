@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Provides a guarded local script that cuts releases only from a clean, synced working tree.
+
+## Requirements
 
 ### Requirement: Release script
 The repository SHALL provide a release script that bumps the version, commits, tags, and pushes — triggering the release pipeline.

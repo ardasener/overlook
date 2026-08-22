@@ -40,6 +40,11 @@ export const TERM_FONT_OPTIONS: { id: TermFontId; name: string }[] = [
 
 export { TERM_SIZE_MIN, TERM_SIZE_MAX };
 
+/** Where software window controls sit in the tab bar (non-macOS only). */
+export type WindowControlsPosition = "left" | "right";
+
+const WINDOW_CONTROLS_POSITIONS: WindowControlsPosition[] = ["left", "right"];
+
 /** A configurable runnable app: a name plus one command per spawned tab. */
 export interface Runnable {
   id: string;
@@ -55,6 +60,8 @@ export interface Settings {
   termFont: TermFontId;
   termSize: number;
   runnables: Runnable[];
+  /** Edge of the tab bar hosting the software window controls (non-macOS). */
+  windowControlsPosition: WindowControlsPosition;
   /** Per-action keyboard shortcuts (primary + optional alternative). */
   keybindings: Record<ActionId, Keybinding>;
   /** Full-window background image (stored filename + blur/opacity). */
@@ -98,6 +105,7 @@ const DEFAULTS: Settings = {
   termFont: "fira-code",
   termSize: 13,
   runnables: DEFAULT_RUNNABLES,
+  windowControlsPosition: "right",
   keybindings: DEFAULT_KEYBINDINGS,
   background: { image: null, blur: 20, opacity: 0.5, remapBackground: false, stripBackground: false },
 };
@@ -156,6 +164,11 @@ function loadSettings(): Settings {
                 r.commands.every((c) => typeof c === "string"),
             )
           : DEFAULT_RUNNABLES,
+      windowControlsPosition: WINDOW_CONTROLS_POSITIONS.includes(
+        parsed.windowControlsPosition as WindowControlsPosition,
+      )
+        ? (parsed.windowControlsPosition as WindowControlsPosition)
+        : DEFAULTS.windowControlsPosition,
       keybindings: normalizeKeybindings(parsed.keybindings),
       background: {
         image:

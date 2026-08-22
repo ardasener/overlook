@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Keeps `tauri:dev` builds from sharing config, state, or identity with an installed release build on the same machine.
+
+## Requirements
 
 ### Requirement: Dev builds use an isolated config identity
 Development builds SHALL run with a distinct bundle identifier (`com.overlook.app.dev`) so their configuration, wallpaper, and webview data are stored separately from the installed application.
