@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Publishes a landing page for the project via GitHub Pages.
+
+## Requirements
 
 ### Requirement: Landing page
 The website SHALL provide a landing page with the app identity, a features summary, and download links for all supported platforms.

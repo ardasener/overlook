@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Adds a right-click menu on projects for rename, favorite, and management actions.
+
+## Requirements
 
 ### Requirement: Right-click context menu on projects
 The application SHALL show a context menu when the user right-clicks a project row, with actions to fork a worktree, rename the project, copy its path, and remove it.

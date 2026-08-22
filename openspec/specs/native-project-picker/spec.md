@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Adds projects through the OS-native folder dialog instead of typed paths.
+
+## Requirements
 
 ### Requirement: Native folder picker for adding projects
 The add-project action SHALL open the platform's native folder-selection dialog. Selecting a directory SHALL add it as a project; canceling SHALL do nothing.

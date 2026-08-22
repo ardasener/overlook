@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Keeps DESIGN.md and README.md as living entry points describing the project's architecture and workflows.
+
+## Requirements
 
 ### Requirement: Design document exists
 The repository SHALL contain a `DESIGN.md` at its root that captures the product vision and architecture.

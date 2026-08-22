@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Owns the project list: adding/removing project directories, persistence, and rendering the workspace tree.
+
+## Requirements
 
 ### Requirement: Project tree
 The application SHALL display the tracked projects as a tree, each project containing a default worktree (the project directory itself) and any git worktrees managed by the application.

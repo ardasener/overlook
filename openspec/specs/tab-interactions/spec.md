@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Defines pointer-based tab drag-and-drop between panes (repositioning and splitting) without HTML5 drag events.
+
+## Requirements
 
 ### Requirement: Drag tabs onto panes
 The application SHALL let the user drag a tab from the tab bar onto a pane slot, assigning that tab to the pane. If the dragged tab was already shown in another pane, the two panes SHALL swap their tabs.

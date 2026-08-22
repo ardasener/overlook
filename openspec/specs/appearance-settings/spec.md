@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Lets users tailor the application's look — palette, UI font and scale, terminal font and size, and background wallpaper — with choices persisted across restarts.
+
+## Requirements
 
 ### Requirement: Settings modal is accessible
 The application SHALL provide a settings modal reachable from a gear button in the workspace sidebar header.
@@ -65,3 +69,18 @@ The application SHALL default to a dark palette with the current terminal font s
 #### Scenario: First launch matches current look
 - **WHEN** the application starts with no stored settings
 - **THEN** the UI SHALL render in a dark theme with a 13px monospace terminal font
+
+### Requirement: Window control position control
+The settings modal SHALL offer a window-control-position choice (left | right, default right) wherever software window controls are rendered. On platforms without software window controls (macOS) the choice SHALL be hidden.
+
+#### Scenario: Setting visible where controls exist
+- **WHEN** the user opens the appearance settings on Linux or Windows
+- **THEN** a "window control position" choice with left and right options SHALL be shown
+
+#### Scenario: Setting hidden on macOS
+- **WHEN** the user opens the appearance settings on macOS
+- **THEN** no window-control-position choice SHALL be shown
+
+#### Scenario: Changing the position updates the controls
+- **WHEN** the user changes the window control position
+- **THEN** the tab bar's window controls SHALL move to the chosen edge immediately, and the choice SHALL persist across restarts

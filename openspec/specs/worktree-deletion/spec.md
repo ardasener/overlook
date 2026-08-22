@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Makes worktree removal safe: only Overlook-managed paths may be deleted, and deletion never touches unmanaged directories.
+
+## Requirements
 
 ### Requirement: Removing a project removes symlinked paths
 Removing a project SHALL remove its stored entry even when the stored path and the input path differ by symlink resolution.

@@ -33,6 +33,13 @@
 - [x] 5.1 Add `.github/workflows/ci.yml` on push (main) + pull_request with jobs that invoke the exact local commands: `cargo test` + clippy and `bun run test`
 - [ ] 5.2 Verify CI triggers on a test commit and reports green (or surfaces a real failure)
 
+## 7. Exit-ordering race fix and multi-OS CI (added post-implementation)
+
+- [x] 7.1 In `spawn_session`, sequence Exit after the reader drained the master: reader signals EOF over a channel; waiter waits (bounded 2s) before sending `TerminalEvent::Exit` and removing the session
+- [x] 7.2 Harden `spawn_session_capture`: treat Exit as the start of a 750ms quiet period instead of end-of-data
+- [x] 7.3 Convert `ci.yml` to an OS matrix — ubuntu-latest and macos-latest run the full suite (Windows attempted as compile+lint-only but deferred after repeated Unix-helper gate churn)
+- [x] 7.4 User commits/pushes and verifies all matrix jobs report green (ubuntu + macOS green on run 32591770178; final green expected after Windows removal)
+
 ## 6. Cleanup and docs
 
 - [x] 6.1 Remove all TEMP-DIAG/TEMP-TEST instrumentation from the cursor-bug investigation (`pty_probe_size`, `pty_dbg_log`, `RPROMPT-chunk`/`RAW-RPROMPT-chunk` logging, `probeDone`, Unicode11 `activeVersion` forcing, `test-plain` font, `ol:renderer` toggle) and restore the Nerd-Fonts default

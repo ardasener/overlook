@@ -59,6 +59,14 @@ The `ci.yml` workflow invokes exactly these commands.
 ### D5. Extract pure functions for testability
 `stripBackgroundCodes` (already pure in `pty.ts`) and the shift-enter predicate/`isShiftEnter` + the xterm option builder get minimal refactors so they can be imported by vitest without mounting React. No behavior change.
 
+### D6. Exit ordering: reader drains before Exit is announced (added post-implementation)
+CI caught `multibyte_output_survives_bridge` failing on macOS with an empty capture. Root cause: the PTY waiter thread sends `TerminalEvent::Exit` the moment the child exits, uncoordinated with the reader thread that forwards output bytes — so trailing output can arrive after Exit, or be lost entirely when session teardown races a mid-read master. The same race ships in production (truncated tails on fast-exiting commands; worst case lost output at teardown). Fix in `spawn_session`: the reader signals completion via a channel when the master hits EOF; the waiter waits (bounded to 2s so an orphaned descendant holding the slave open cannot hang the session) before sending Exit and removing the session. Additionally the test drain helper treats Exit as "start a 750ms quiet-period" rather than end-of-data.
+
+*Rationale:* fixing the source guarantees Output-before-Exit downstream for both tests and the app; fixing only the drain helper would mask a real ordering bug.
+
+### D7. CI runs on Linux and macOS (Windows deferred)
+The original single `macos-latest` job existed because the PTY integration tests need a POSIX shell and macOS was the only supported dev platform. With Linux as a daily-driver platform (and a macOS-runner-only scheduling race slipping through), CI now runs a matrix: ubuntu + macos both run the full suite (`cargo clippy` + `cargo test` + frontend checks). Windows was attempted as a clippy + frontend job but repeatedly tripped over Unix-gated helpers in the PTY module (dead-code / E0425 churn); with no Windows users or CI coverage of runtime behavior anyway, it was dropped for now. Re-adding it later requires making the `ps`-poller surface (`parse_ps_output`, `is_shell_comm`) cleanly cross-platform or gating its tests.
+
 ## Risks / Trade-offs
 
 - **[zsh-dependent tests are locale/env sensitive]** → the L2 locale test sets its own env explicitly; do not rely on the developer machine's locale.

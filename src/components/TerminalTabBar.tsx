@@ -15,6 +15,7 @@ import { useSettings } from "../settings/SettingsContext";
 import { useTerminalLayout } from "../layout/TerminalLayoutContext";
 import { registerShortcutAction } from "../shortcuts/actionRegistry";
 import { isMacOS } from "../lib/platform";
+import WindowControls from "./WindowControls";
 import "./TerminalTabBar.css";
 
 interface TerminalTabBarProps {
@@ -40,6 +41,11 @@ function TerminalTabBar({
   const { state, slotOf, newTab, closeTab, selectTab, toggleVertical, toggleBottom, beginDrag, launchRunnable } =
     useTerminalLayout();
   const { settings, palette } = useSettings();
+
+  // Software window controls exist only on undecorated windows (non-macOS);
+  // macOS keeps its native traffic lights and the 80px left padding.
+  const showWindowControls = !isMacOS();
+  const controlsSide = settings.windowControlsPosition;
 
   const focusedTabId =
     state.focusedSlot < state.slots.length ? state.slots[state.focusedSlot] : null;
@@ -130,6 +136,9 @@ function TerminalTabBar({
       data-tauri-drag-region="deep"
       style={isMacOS() ? ({ paddingLeft: 80 } as CSSProperties) : undefined}
     >
+      {showWindowControls && controlsSide === "left" && (
+        <WindowControls side="left" />
+      )}
       <div className="tabbar-actions-left" data-tauri-drag-region="deep">
         <Tooltip title={workspacesOpen ? "Hide workspaces" : "Show workspaces"}>
           <Button
@@ -282,6 +291,9 @@ function TerminalTabBar({
           />
         </Tooltip>
       </div>
+      {showWindowControls && controlsSide === "right" && (
+        <WindowControls side="right" />
+      )}
     </div>
   );
 }

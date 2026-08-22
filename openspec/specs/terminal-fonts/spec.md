@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Bundles Nerd Fonts so PUA glyphs render correctly in the terminal, selectable from the appearance settings.
+
+## Requirements
 
 ### Requirement: Bundled Nerd Fonts for terminal rendering
 The application SHALL bundle Nerd Fonts (Mono variants) so terminal glyphs — powerline, devicons, octicons, and other Private Use Area codepoints — render correctly on every supported OS without requiring users to install fonts.

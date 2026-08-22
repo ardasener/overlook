@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Structures the terminal area: tab bar plus single or split panes, each hosting its own session.
+
+## Requirements
 
 ### Requirement: Tab bar with one terminal per tab
 The application SHALL display a tab bar above the terminal area, where each tab represents one live terminal session, and the bar SHALL scroll horizontally when tabs overflow the available width.

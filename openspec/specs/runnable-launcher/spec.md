@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Lets users launch saved multi-command runnables into new tabs from a searchable popover in the tab bar.
+
+## Requirements
 
 ### Requirement: Runnable launcher button
 The application SHALL display a run button next to the new-terminal button in the tab bar. Clicking it SHALL open a popover with a search input and the list of runnables.

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Lets users star projects so favorites sort first in the workspace tree and persist across restarts.
+
+## Requirements
 
 ### Requirement: Favorite projects
 The application SHALL let the user toggle a favorite state on each project via a star button. Favorited projects SHALL sort above non-favorited projects, and within each group projects SHALL be ordered alphabetically by their display name.

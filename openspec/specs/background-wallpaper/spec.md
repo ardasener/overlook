@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Lets users set a full-window background image behind the terminal, with blur/opacity controls and terminal-background remapping so wallpapers show through.
+
+## Requirements
 
 ### Requirement: Background image wallpaper
 The application SHALL support a user-selected background image that covers the full window behind all UI, with configurable blur and opacity. The app chrome and terminal panes SHALL be translucent so the image is visible through them.

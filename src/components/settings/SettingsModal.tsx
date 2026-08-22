@@ -20,6 +20,7 @@ import {
   type Runnable,
 } from "../../settings/SettingsContext";
 import { TERM_FONT_STACKS } from "../../themes/xterm";
+import { isMacOS } from "../../lib/platform";
 import {
   ACTION_LABELS,
   ACTIONS,
@@ -275,6 +276,25 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
                     />
                   </Tooltip>
                 </div>
+
+                {!isMacOS() && (
+                  <div className="settings-field">
+                    <span className="settings-label">Window control position</span>
+                    <Tooltip title="Where the minimize / maximize / close buttons sit (not used on macOS)">
+                      <Select
+                        value={settings.windowControlsPosition}
+                        onChange={(windowControlsPosition) =>
+                          update({ windowControlsPosition })
+                        }
+                        style={{ width: 220 }}
+                        options={[
+                          { value: "right", label: "Right" },
+                          { value: "left", label: "Left" },
+                        ]}
+                      />
+                    </Tooltip>
+                  </div>
+                )}
 
                 <h3 className="settings-section-title">Background image</h3>
 
