@@ -307,6 +307,112 @@ body.has-wallpaper .app-sider .workspace-search input {
   background: transparent;
 }
 
+/* AntD modal portals render under body, outside the themed app subtree. Use
+   document-level palette variables so every modal follows the active scheme,
+   including static Modal.confirm dialogs. */
+.ant-modal-container,
+.ant-modal-content {
+  background: var(--ol-modal-bg) !important;
+  color: var(--ol-text) !important;
+}
+
+.ant-modal-header,
+.ant-modal-footer {
+  background: transparent !important;
+  border-color: var(--ol-border) !important;
+}
+
+.ant-modal-title,
+.ant-modal-confirm-title,
+.ant-modal-confirm-content {
+  color: var(--ol-text) !important;
+}
+
+.ant-modal-close {
+  color: var(--ol-text-muted) !important;
+}
+
+.ant-modal-close:hover {
+  color: var(--ol-text) !important;
+  background: color-mix(in srgb, var(--ol-text) 10%, transparent) !important;
+}
+
+.ant-modal-mask {
+  background-color: var(--ol-modal-mask) !important;
+  opacity: var(--ol-modal-mask-opacity);
+}
+
+.ant-modal .ant-btn-default {
+  color: var(--ol-text) !important;
+  border-color: var(--ol-border) !important;
+  background: var(--ol-surface) !important;
+}
+
+.ant-modal .ant-btn-default:hover {
+  color: var(--ol-primary) !important;
+  border-color: var(--ol-primary) !important;
+}
+
+.ant-modal .ant-btn-primary {
+  background: var(--ol-primary) !important;
+}
+
+/* Select/AutoComplete dropdowns also render in a body-level portal. Keep the
+   popup and its option states on the active palette instead of AntD's default
+   elevated colors. */
+.ant-select-dropdown {
+  background: var(--ol-popup-bg) !important;
+  color: var(--ol-text) !important;
+}
+
+.ant-select-item-option {
+  color: var(--ol-text) !important;
+}
+
+.ant-select-item-option-active {
+  background: color-mix(in srgb, var(--ol-text) 10%, transparent) !important;
+}
+
+.ant-select-item-option-selected {
+  color: var(--ol-text) !important;
+  background: color-mix(in srgb, var(--ol-primary) 18%, transparent) !important;
+}
+
+.ant-select-item-option-selected.ant-select-item-option-active {
+  background: color-mix(in srgb, var(--ol-primary) 26%, transparent) !important;
+}
+
+.ant-select-item-option-disabled,
+.ant-select-item-empty {
+  color: var(--ol-text-muted) !important;
+}
+
+/* Context menus are Dropdown + Menu portals and have their own popup token
+   names. Keep right-click project/worktree menus on the active palette too. */
+.ant-dropdown-menu {
+  background: var(--ol-popup-bg) !important;
+  color: var(--ol-text) !important;
+}
+
+.ant-dropdown-menu-item,
+.ant-dropdown-menu-submenu-title {
+  color: var(--ol-text) !important;
+}
+
+.ant-dropdown-menu-item:hover,
+.ant-dropdown-menu-submenu-title:hover {
+  background: color-mix(in srgb, var(--ol-text) 10%, transparent) !important;
+}
+
+.ant-dropdown-menu-item-danger,
+.ant-dropdown-menu-item-danger:hover {
+  color: var(--ol-error, var(--ol-text)) !important;
+}
+
+.ant-dropdown-menu-item-divider {
+  background-color: var(--ol-border) !important;
+}
+
 .terminal-error {
   position: absolute;
   top: 12px;

@@ -1,42 +1,34 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { PALETTES, getPalette, type Palette } from "../themes/palettes";
+import { DEFAULT_PALETTE_ID, PALETTES, getPalette, type Palette } from "../themes/palettes";
 import { applyPaletteVars } from "../themes/cssVars";
 import {
   UI_SCALE_DEFAULT,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
+  DEFAULT_UI_FONT,
   type UiFontId,
 } from "../themes/antd";
-import { TERM_SIZE_MAX, TERM_SIZE_MIN, type TermFontId } from "../themes/xterm";
+import { DEFAULT_TERM_FONT, TERM_SIZE_MAX, TERM_SIZE_MIN, type TermFontId } from "../themes/xterm";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  BUNDLED_FONT_OPTIONS,
+  normalizeFontOptions,
+  repairFontSelections,
+  type FontFamilyOption,
+} from "./fonts";
 import type { ActionId, Keybinding } from "../shortcuts/keybindings";
 import { DEFAULT_KEYBINDINGS } from "../shortcuts/keybindings";
 
-export const UI_FONT_OPTIONS: { id: UiFontId; name: string }[] = [
-  { id: "inter", name: "Inter" },
-  { id: "roboto", name: "Roboto" },
-  { id: "noto-sans", name: "Noto Sans" },
-];
-
 export { UI_SCALE_DEFAULT, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_STEP };
-
-export const TERM_FONT_OPTIONS: { id: TermFontId; name: string }[] = [
-  { id: "fira-code", name: "FiraCode" },
-  { id: "jetbrains-mono", name: "JetBrainsMono" },
-  { id: "blex-mono", name: "BlexMono" },
-  { id: "sauce-code-pro", name: "SauceCodePro" },
-  { id: "go-mono", name: "GoMono" },
-  { id: "ubuntu-mono", name: "UbuntuMono" },
-  { id: "dejavu-sans-mono", name: "DejaVuSansMono" },
-  { id: "terminess", name: "Terminess" },
-];
 
 export { TERM_SIZE_MIN, TERM_SIZE_MAX };
 
@@ -99,10 +91,10 @@ const DEFAULT_RUNNABLES: Runnable[] = [
 ];
 
 const DEFAULTS: Settings = {
-  themeId: "nord",
-  uiFont: "inter",
+  themeId: DEFAULT_PALETTE_ID,
+  uiFont: DEFAULT_UI_FONT,
   uiScale: UI_SCALE_DEFAULT,
-  termFont: "fira-code",
+  termFont: DEFAULT_TERM_FONT,
   termSize: 13,
   runnables: DEFAULT_RUNNABLES,
   windowControlsPosition: "right",
@@ -126,10 +118,8 @@ export function snapUiScale(value: number): number {
   return normalizeScale(value);
 }
 
-/** Map a stored termFont id to a current one, migrating the old IBM Plex Mono id. */
-function normalizeTermFont(id: unknown): TermFontId {
-  if (id === "ibm-plex-mono") return "blex-mono";
-  return TERM_FONT_OPTIONS.some((o) => o.id === id) ? (id as TermFontId) : DEFAULTS.termFont;
+function normalizeFont(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
 }
 
 function loadSettings(): Settings {
@@ -141,14 +131,12 @@ function loadSettings(): Settings {
       themeId: PALETTES.some((p) => p.id === parsed.themeId)
         ? parsed.themeId!
         : DEFAULTS.themeId,
-      uiFont: UI_FONT_OPTIONS.some((o) => o.id === parsed.uiFont)
-        ? parsed.uiFont!
-        : DEFAULTS.uiFont,
+      uiFont: normalizeFont(parsed.uiFont, DEFAULTS.uiFont),
       uiScale:
         typeof parsed.uiScale === "number" && Number.isFinite(parsed.uiScale)
           ? normalizeScale(parsed.uiScale)
           : DEFAULTS.uiScale,
-      termFont: normalizeTermFont(parsed.termFont),
+      termFont: normalizeFont(parsed.termFont, DEFAULTS.termFont),
       termSize:
         typeof parsed.termSize === "number" && Number.isFinite(parsed.termSize)
           ? clampSize(parsed.termSize)
@@ -221,12 +209,43 @@ interface SettingsContextValue {
   settings: Settings;
   palette: Palette;
   update: (patch: Partial<Settings>) => void;
+  fonts: FontFamilyOption[];
+  fontsLoading: boolean;
+  refreshFonts: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [fonts, setFonts] = useState<FontFamilyOption[]>(BUNDLED_FONT_OPTIONS);
+  const [fontsLoading, setFontsLoading] = useState(false);
+
+  const refreshFonts = useCallback(async () => {
+    setFontsLoading(true);
+    try {
+      const discovered = await invoke<FontFamilyOption[]>("font_list");
+      const nextFonts = normalizeFontOptions([...BUNDLED_FONT_OPTIONS, ...discovered]);
+      setFonts(nextFonts);
+      setSettings((prev) => ({
+        ...prev,
+        ...repairFontSelections(prev.uiFont, prev.termFont, nextFonts),
+      }));
+    } catch {
+      setFonts(BUNDLED_FONT_OPTIONS);
+      setSettings((prev) => ({
+        ...prev,
+        uiFont: DEFAULT_UI_FONT,
+        termFont: DEFAULT_TERM_FONT,
+      }));
+    } finally {
+      setFontsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshFonts();
+  }, [refreshFonts]);
 
   // Keep the palette CSS variables on the document root so the whole page
   // (including portals) inherits theme colors, matching the window edges.
@@ -243,8 +262,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       settings,
       palette: getPalette(settings.themeId),
       update: (patch) => setSettings((prev) => ({ ...prev, ...patch })),
+      fonts,
+      fontsLoading,
+      refreshFonts,
     }),
-    [settings],
+    [fonts, fontsLoading, refreshFonts, settings],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

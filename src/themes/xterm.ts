@@ -2,18 +2,13 @@ import type { ITheme } from "@xterm/xterm";
 import type { Palette } from "./palettes";
 import { withAlpha } from "./palettes";
 
-export const TERM_FONT_STACKS = {
-  "fira-code": "'FiraCode Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "jetbrains-mono": "'JetBrainsMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "blex-mono": "'BlexMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "sauce-code-pro": "'SauceCodePro Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "go-mono": "'GoMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "ubuntu-mono": "'UbuntuMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "dejavu-sans-mono": "'DejaVuSansMono Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-  "terminess": "'Terminess Nerd Font Mono', 'SF Mono', Menlo, Consolas, monospace",
-} as const;
+export const DEFAULT_TERM_FONT = "FiraCode Nerd Font Mono";
 
-export type TermFontId = keyof typeof TERM_FONT_STACKS;
+export type TermFontId = string;
+
+export function termFontStack(family: TermFontId): string {
+  return `'${family.replace(/'/g, "\\'")}', 'SF Mono', Menlo, Consolas, monospace`;
+}
 
 /** Terminal font size bounds (px). */
 export const TERM_SIZE_MIN = 8;
@@ -64,7 +59,7 @@ export function xtermOptions(
   remapBackground = false,
 ) {
   return {
-    fontFamily: TERM_FONT_STACKS[termFont],
+    fontFamily: termFontStack(termFont),
     fontSize: termSize,
     theme: xtermTheme(palette, translucent, remapBackground),
   };

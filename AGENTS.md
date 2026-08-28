@@ -33,6 +33,7 @@ bun tauri build          # production bundle
 bun check-types          # TypeScript type check
 bun lint                 # ESLint
 bun run test             # frontend headless tests (vitest + @xterm/headless, no DOM)
+bun run provision         # fetch/cache generated Base16 themes and bundled fonts
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
@@ -43,6 +44,8 @@ CI (`.github/workflows/ci.yml`) runs an ubuntu + macOS matrix on push to main + 
 
 - Prefer small, single-purpose modules with clear boundaries (`modules/pty/`, `modules/git/`, `modules/workspace/`).
 - IPC commands: `pty_open`, `pty_write`, `pty_resize`, `pty_close` naming style — snake_case, typed frontend wrappers.
+- Theme data is generated from the pinned Tinted Theming Base16 catalog by `bun run themes:fetch`; generated theme assets are gitignored.
+- System font discovery belongs in Rust via `fontdb`; the webview must use the registered command and never inspect font files directly. UI font choices include all discovered families; terminal choices must be monospaced.
 - Keep comments minimal; document intent, not implementation.
 - Domain-driven names over generic ones.
 - Windows/WSL support is explicitly deferred; keep platform-specific logic in `#[cfg(unix)]`/`#[cfg(windows)]` arms.

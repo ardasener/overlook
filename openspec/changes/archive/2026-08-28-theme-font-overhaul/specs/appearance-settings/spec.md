@@ -1,13 +1,4 @@
-## Purpose
-
-Lets users tailor the application's look — palette, UI font and scale, terminal font and size, and background wallpaper — with choices persisted across restarts.
-## Requirements
-### Requirement: Settings modal is accessible
-The application SHALL provide a settings modal reachable from a gear button in the workspace sidebar header.
-
-#### Scenario: Open settings from sidebar
-- **WHEN** the user clicks the gear button in the sidebar header
-- **THEN** a settings modal opens with Appearance and Terminal sections
+## MODIFIED Requirements
 
 ### Requirement: Theme selection drives both UI and terminal
 The application SHALL let the user choose one generated Base16 palette that drives both the AntD UI chrome and the terminal colors, including ANSI colors. The selector SHALL be searchable and SHALL display a compact color preview beside each theme name.
@@ -68,20 +59,7 @@ The application SHALL default to Catppuccin Mocha, bundled Inter, bundled Fira C
 - **WHEN** the application starts with no stored appearance settings
 - **THEN** it SHALL render with Catppuccin Mocha, Inter UI text, Fira Code Nerd Font terminal text, and a 13px terminal font size
 
-### Requirement: Window control position control
-The settings modal SHALL offer a window-control-position choice (left | right, default right) wherever software window controls are rendered. On platforms without software window controls (macOS) the choice SHALL be hidden.
-
-#### Scenario: Setting visible where controls exist
-- **WHEN** the user opens the appearance settings on Linux or Windows
-- **THEN** a "window control position" choice with left and right options SHALL be shown
-
-#### Scenario: Setting hidden on macOS
-- **WHEN** the user opens the appearance settings on macOS
-- **THEN** no window-control-position choice SHALL be shown
-
-#### Scenario: Changing the position updates the controls
-- **WHEN** the user changes the window control position
-- **THEN** the tab bar's window controls SHALL move to the chosen edge immediately, and the choice SHALL persist across restarts
+## ADDED Requirements
 
 ### Requirement: Modal and popup surfaces follow the active palette
 All application modal dialogs, confirmation dialogs, appearance dropdowns, and context menus SHALL use the active palette for their surfaces, text, borders, option/item states, and overlay mask where applicable. This SHALL apply to components rendered through portals and static confirmation dialogs.
@@ -105,4 +83,3 @@ All application modal dialogs, confirmation dialogs, appearance dropdowns, and c
 #### Scenario: Context menu follows the active palette
 - **WHEN** the user opens a project or worktree context menu under a light or dark palette
 - **THEN** the menu surface, item text, hover states, danger items, and dividers SHALL use palette-aware colors
-

@@ -9,13 +9,13 @@ export const UI_SCALE_STEP = 0.25;
 /** Base UI font size before the relational scale is applied. */
 export const UI_FONT_SIZE_BASE = 14;
 
-export const UI_FONT_STACKS = {
-  inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  roboto: "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  "noto-sans": "'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-} as const;
+export const DEFAULT_UI_FONT = "Inter";
 
-export type UiFontId = keyof typeof UI_FONT_STACKS;
+export type UiFontId = string;
+
+export function uiFontStack(family: UiFontId): string {
+  return `'${family.replace(/'/g, "\\'")}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+}
 
 export function antdTheme(
   palette: Palette,
@@ -40,7 +40,7 @@ export function antdTheme(
       colorTextQuaternary: palette.textMuted,
       colorBorder: palette.border,
       colorBorderSecondary: palette.border,
-      fontFamily: UI_FONT_STACKS[uiFont],
+      fontFamily: uiFontStack(uiFont),
       fontSize: UI_FONT_SIZE_BASE * uiScale,
       borderRadius: 4,
     },

@@ -75,63 +75,28 @@
   color: var(--ol-primary);
 }
 
-/* Theme picker cards */
-.theme-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: calc(8px * var(--ol-scale));
-  width: 100%;
-}
-
-.theme-card {
-  position: relative;
+.theme-option {
   display: flex;
   align-items: center;
   gap: calc(8px * var(--ol-scale));
-  padding: calc(8px * var(--ol-scale)) calc(10px * var(--ol-scale));
-  border: 1px solid var(--ol-border);
-  border-radius: 6px;
-  background: var(--ol-surface);
-  cursor: pointer;
-  transition: border-color 0.15s;
 }
 
-.theme-card:hover {
-  border-color: var(--ol-primary);
-}
-
-.theme-card-active {
-  border-width: 2px;
-}
-
-.theme-card-dots {
+.theme-option-dots {
   display: flex;
   gap: 2px;
 }
 
-.theme-card-dots i {
+.theme-option-dots i {
   width: calc(12px * var(--ol-scale));
   height: calc(12px * var(--ol-scale));
   border-radius: 50%;
   display: block;
 }
 
-.theme-card-name {
-  font-size: calc(12px * var(--ol-scale));
-  color: var(--ol-text);
-}
-
-.theme-card-check {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: calc(16px * var(--ol-scale));
-  height: calc(16px * var(--ol-scale));
-  border-radius: 50%;
+.settings-font-controls {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 10px;
+  gap: calc(4px * var(--ol-scale));
 }
 
 /* ── Runnable config ───────────────────────────────────────── */

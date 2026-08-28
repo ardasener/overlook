@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckOutlined, DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, QuestionCircleOutlined, RedoOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, QuestionCircleOutlined, RedoOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, message, Modal, Select, Slider, Switch, Tabs, Tooltip } from "antd";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,10 +8,8 @@ import {
   BACKGROUND_BLUR_MAX,
   BACKGROUND_OPACITY_MAX,
   BACKGROUND_OPACITY_MIN,
-  TERM_FONT_OPTIONS,
   TERM_SIZE_MAX,
   TERM_SIZE_MIN,
-  UI_FONT_OPTIONS,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
@@ -19,7 +17,8 @@ import {
   useSettings,
   type Runnable,
 } from "../../settings/SettingsContext";
-import { TERM_FONT_STACKS } from "../../themes/xterm";
+import { termFontStack } from "../../themes/xterm";
+import { uiFontStack } from "../../themes/antd";
 import { isMacOS } from "../../lib/platform";
 import {
   ACTION_LABELS,
@@ -59,7 +58,7 @@ interface RecordingState {
 }
 
 function SettingsModal({ open, onClose }: SettingsModalProps) {
-  const { settings, update } = useSettings();
+  const { settings, update, fonts, fontsLoading, refreshFonts } = useSettings();
 
   // Runnable editor: null = closed; NEW_RUNNABLE_ID = adding; else editing.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -217,37 +216,27 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                 <div className="settings-field">
                   <span className="settings-label">Theme</span>
-                  <div className="theme-grid">
-                    {PALETTES.map((p) => {
-                      const selected = settings.themeId === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className={`theme-card${selected ? " theme-card-active" : ""}`}
-                          onClick={() => update({ themeId: p.id })}
-                          style={selected ? { borderColor: p.primary } : undefined}
-                          aria-pressed={selected}
-                        >
-                          <span className="theme-card-dots">
-                            <i style={{ background: p.bg }} />
-                            <i style={{ background: p.surface }} />
-                            <i style={{ background: p.text }} />
-                            <i style={{ background: p.primary }} />
+                  <Select
+                    value={settings.themeId}
+                    onChange={(themeId) => update({ themeId })}
+                    showSearch
+                    optionFilterProp="searchLabel"
+                    style={{ width: "100%" }}
+                    options={PALETTES.map((p) => ({
+                      value: p.id,
+                      searchLabel: p.name,
+                      label: (
+                        <span className="theme-option">
+                          <span className="theme-option-dots">
+                            {[p.bg, p.surface, p.text, p.primary].map((color) => (
+                              <i key={color} style={{ background: color }} />
+                            ))}
                           </span>
-                          <span className="theme-card-name">{p.name}</span>
-                          {selected && (
-                            <span
-                              className="theme-card-check"
-                              style={{ background: p.primary, color: p.primaryText }}
-                            >
-                              <CheckOutlined />
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                          <span>{p.name}</span>
+                        </span>
+                      ),
+                    }))}
+                  />
                 </div>
 
                 <div className="settings-field">
@@ -256,10 +245,14 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
                     value={settings.uiFont}
                     onChange={(uiFont) => update({ uiFont })}
                     style={{ width: 220 }}
-                    options={UI_FONT_OPTIONS.map((o) => ({
-                      value: o.id,
-                      label: o.name,
+                    showSearch
+                    options={fonts.map((font) => ({
+                      value: font.name,
+                      label: <span style={{ fontFamily: uiFontStack(font.name) }}>{font.name}</span>,
+                      searchLabel: font.name,
                     }))}
+                    optionFilterProp="searchLabel"
+                    loading={fontsLoading}
                   />
                 </div>
 
@@ -374,18 +367,34 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                 <h3 className="settings-section-title">Terminal</h3>
 
-                <div className="settings-field">
-                  <span className="settings-label">Font</span>
-                  <Select
-                    value={settings.termFont}
-                    onChange={(termFont) => update({ termFont })}
-                    style={{ width: 220 }}
-                    options={TERM_FONT_OPTIONS.map((o) => ({
-                      value: o.id,
-                      label: <span style={{ fontFamily: TERM_FONT_STACKS[o.id] }}>{o.name}</span>,
-                    }))}
-                  />
-                </div>
+                  <div className="settings-field">
+                    <span className="settings-label">Font</span>
+                    <div className="settings-font-controls">
+                      <Select
+                        value={settings.termFont}
+                        onChange={(termFont) => update({ termFont })}
+                        style={{ width: 220 }}
+                        showSearch
+                        optionFilterProp="label"
+                        loading={fontsLoading}
+                        options={fonts
+                          .filter((font) => font.monospaced)
+                          .map((font) => ({
+                            value: font.name,
+                            label: <span style={{ fontFamily: termFontStack(font.name) }}>{font.name}</span>,
+                          }))}
+                      />
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<ReloadOutlined spin={fontsLoading} />}
+                        onClick={() => void refreshFonts()}
+                        loading={fontsLoading}
+                        aria-label="Refresh fonts"
+                        title="Refresh system fonts"
+                      />
+                    </div>
+                  </div>
 
                 <div className="settings-field">
                   <span className="settings-label">Default font size</span>

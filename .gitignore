@@ -4,6 +4,7 @@ node_modules/
 
 # Generated assets & tooling
 src/assets/nerd-fonts/
+src/generated/
 .fonts-venv/
 
 # Build output

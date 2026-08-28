@@ -196,7 +196,7 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
             {
               key: "fork",
               icon: <BranchesOutlined />,
-              label: "Fork worktree…",
+              label: "Fork worktree",
               onClick: () => openFork(project.path),
             },
           ]
@@ -204,7 +204,7 @@ function WorkspaceSidebar({ onReveal }: WorkspaceSidebarProps) {
       {
         key: "rename",
         icon: <EditOutlined />,
-        label: "Rename…",
+        label: "Rename",
         onClick: () => openRename(project),
       },
       {

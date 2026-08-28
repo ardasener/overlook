@@ -34,11 +34,17 @@ On some NVIDIA + KDE/Wayland systems, WebKitGTK can deliver terminal frames inco
 
 ### Terminal fonts (Nerd Fonts)
 
-The terminal fonts are Nerd Fonts (Mono variants), fetched and converted at build time by `bun run fonts:fetch` (runs automatically before `dev`/`build`).
+The terminal font bundle contains Fira Code Nerd Font (Mono), fetched and converted at build time by `bun run fonts:fetch` (runs automatically through `bun run provision` before `dev`/`build`/`check-types`/`test`). Other font families are discovered from the host system.
 
 - **Python 3 is required**: the fetch step creates a gitignored venv (`.fonts-venv/`) and installs `fontTools` + `brotli` into it to convert TTFs to woff2. Nothing is installed system-wide.
 - **Bumping the Nerd Fonts version**: edit `VERSION` and the `sha256` checksums in `scripts/fetch-nerd-fonts.ts`, then run `bun run fonts:fetch --force`. Checksums pin the upstream files — a mismatch fails the build instead of shipping a mutated font.
 - Helpful flags: `--check` fails fast when fonts are missing/stale; `--force` re-downloads and re-converts everything.
+
+### Themes
+
+Themes are generated from the [Tinted Theming Base16 schemes](https://github.com/tinted-theming/schemes/tree/spec-0.11) catalog by `bun run themes:fetch`. The source revision and generated TypeScript catalog are cached locally and ignored by git. Provisioning runs automatically through `bun run provision` before development, builds, type checks, and tests.
+
+The app discovers system font families through the Rust backend using `fontdb`. The UI selector includes all discovered families; the terminal selector includes only monospaced families. Inter and Fira Code Nerd Font remain the bundled fallbacks when a selected system font is unavailable.
 
 ## Checks
 
