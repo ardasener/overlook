@@ -1,6 +1,6 @@
 [package]
 name = "overlook"
-version = "0.5.0"
+version = "0.5.1"
 description = "Terminal-first desktop workspace for project management"
 authors = ["asener"]
 edition = "2021"
