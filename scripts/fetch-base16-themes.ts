@@ -40,14 +40,22 @@ async function fetchSource(): Promise<void> {
   await extract({ cwd: SOURCE_DIR, file: ARCHIVE_FILE });
 }
 
-async function sourceRoot(): Promise<string> {
-  if (existsSync(path.join(SOURCE_DIR, "base16"))) {
-    return path.join(SOURCE_DIR, "base16");
+async function findDirectory(root: string, name: string): Promise<string | null> {
+  const entries = await readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const candidate = path.join(root, entry.name);
+    if (entry.name === name) return candidate;
+    const nested = await findDirectory(candidate, name);
+    if (nested) return nested;
   }
-  const entries = await readdir(SOURCE_DIR, { withFileTypes: true });
-  const root = entries.find((entry) => entry.isDirectory());
-  if (!root) throw new Error("Base16 source archive contained no root directory");
-  return path.join(SOURCE_DIR, root.name, "base16");
+  return null;
+}
+
+async function sourceRoot(): Promise<string> {
+  const root = await findDirectory(SOURCE_DIR, "base16");
+  if (!root) throw new Error("Base16 source archive contained no base16 directory");
+  return root;
 }
 
 async function generate(): Promise<void> {
