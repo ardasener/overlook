@@ -6,6 +6,35 @@ on:
   pull_request:
 
 jobs:
+  platform-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          version: 1.2.17 # matches package.json's packageManager
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+
+      - name: install frontend dependencies
+        run: bun install
+
+      - name: build without bundling installers
+        run: bun tauri build --no-bundle
+
   test:
     strategy:
       fail-fast: false

@@ -38,7 +38,7 @@ cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
 
-CI (`.github/workflows/ci.yml`, currently macOS-only) runs on push to main + pull requests. Linux CI coverage is temporarily disabled while an Ubuntu-only PTY test timeout is investigated; the Linux setup remains in the workflow for easy re-enabling. Windows is deferred: the shell-dependent PTY tests are `#[cfg(unix)]` and the `ps`-poller helpers aren't cleanly cross-platform yet. The commands invoked are exactly the local ones: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `bun run test`, `bun check-types`, `bun lint`. There is no GUI/WebDriver-based test layer; the Rust PTY tests spawn real shells via `spawn_session`'s path (see `pty_integration` in `src-tauri/src/modules/pty/session.rs`).
+CI (`.github/workflows/ci.yml`) runs the full test suite on macOS and runs a no-bundle Tauri build check on Ubuntu and Windows. Linux test coverage is temporarily disabled while an Ubuntu-only PTY test timeout is investigated; the Linux setup remains in the workflow for easy re-enabling. Windows tests are deferred: the shell-dependent PTY tests are `#[cfg(unix)]` and the `ps`-poller helpers aren't cleanly cross-platform yet. The commands invoked are exactly the local ones: `cargo clippy --all-targets -- -D warnings`, `cargo test`, `bun run test`, `bun check-types`, `bun lint`, and `bun tauri build --no-bundle` for platform compilation. There is no GUI/WebDriver-based test layer; the Rust PTY tests spawn real shells via `spawn_session`'s path (see `pty_integration` in `src-tauri/src/modules/pty/session.rs`).
 
 ## Conventions
 

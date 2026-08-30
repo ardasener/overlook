@@ -56,7 +56,7 @@ cd src-tauri && cargo clippy --all-targets -- -D warnings
 cd src-tauri && cargo test
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of these on push to main and pull requests. It currently runs on macOS; Linux CI is temporarily disabled while an Ubuntu-only PTY test timeout is investigated. The Rust test suite spawns real shells through `spawn_session`'s actual code path; the frontend suite drives xterm headlessly — no GUI or window server is involved anywhere in the test path.
+CI (`.github/workflows/ci.yml`) runs all of these on push to main and pull requests. Full tests currently run on macOS; Ubuntu and Windows run a no-bundle Tauri build check. Linux test execution is temporarily disabled while an Ubuntu-only PTY test timeout is investigated. The Rust test suite spawns real shells through `spawn_session`'s actual code path; the frontend suite drives xterm headlessly — no GUI or window server is involved anywhere in the test path.
 
 ## Architecture in one paragraph
 
