@@ -6,6 +6,11 @@ export const DEFAULT_TERM_FONT = "FiraCode Nerd Font Mono";
 
 export type TermFontId = string;
 
+/** Transparency is needed only when the terminal is composited over wallpaper. */
+export function shouldAllowTerminalTransparency(backgroundImage: string | null): boolean {
+  return backgroundImage !== null;
+}
+
 export function termFontStack(family: TermFontId): string {
   return `'${family.replace(/'/g, "\\'")}', 'SF Mono', Menlo, Consolas, monospace`;
 }

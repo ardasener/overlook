@@ -5,7 +5,7 @@ import { useSettings } from "../../settings/SettingsContext";
 import { useTerminalLayout } from "../../layout/TerminalLayoutContext";
 import { registerShortcutAction } from "../../shortcuts/actionRegistry";
 import type { ActionId } from "../../shortcuts/keybindings";
-import { xtermOptions } from "../../themes/xterm";
+import { shouldAllowTerminalTransparency, xtermOptions } from "../../themes/xterm";
 import { isShiftEnter } from "./keys";
 import { useTerminal } from "./useTerminal";
 import {
@@ -20,7 +20,6 @@ import {
 const BASE_TERMINAL_OPTIONS = {
   cursorBlink: true,
   scrollback: 10_000,
-  allowTransparency: true,
 };
 
 /**
@@ -83,6 +82,7 @@ function TerminalHost({ tabId, slot, visible }: TerminalHostProps) {
   const initialOptions = useMemo(
     () => ({
       ...BASE_TERMINAL_OPTIONS,
+      allowTransparency: shouldAllowTerminalTransparency(settings.background.image),
       ...xtermOptions(
         palette,
         settings.termFont,

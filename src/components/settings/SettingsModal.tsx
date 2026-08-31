@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, QuestionCircleOutlined, RedoOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Input, InputNumber, message, Modal, Select, Slider, Switch, Tabs, Tooltip } from "antd";
+import { Alert, Button, Input, InputNumber, message, Modal, Select, Slider, Switch, Tabs, Tooltip } from "antd";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { PALETTES } from "../../themes/palettes";
@@ -293,6 +293,12 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                 {settings.background.image ? (
                   <div className="settings-stack">
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title="Transparent terminals may look softer"
+                      description="Small text can appear thinner over a background image. Clear the background for the sharpest terminal text."
+                    />
                     <Button
                       icon={<PictureOutlined />}
                       onClick={() => void pickBackground()}
@@ -327,7 +333,7 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
                       Clear background
                     </Button>
 
-                    <div className="settings-toggle-row">
+                     <div className="settings-toggle-row">
                       <span className="settings-label">
                         Remap background colors
                         <Tooltip title="Makes the terminal's default background transparent so apps that use the default background let your wallpaper show through. Colored text highlights still work.">
@@ -354,13 +360,13 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
                         onChange={(stripBackground) =>
                           update({ background: { ...settings.background, stripBackground } })
                         }
-                      />
+                       />
+                     </div>
                     </div>
-                  </div>
                 ) : (
                   <div className="settings-field">
                     <Button icon={<PictureOutlined />} onClick={() => void pickBackground()} block>
-                      Upload photo
+                      Set background
                     </Button>
                   </div>
                 )}
